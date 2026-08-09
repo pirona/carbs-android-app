@@ -12,6 +12,7 @@ import { renderDayScreen, type DayScreenRepos } from './ui/screens/DayScreen';
 import { renderWeekScreen, type WeekScreenRepos } from './ui/screens/WeekScreen';
 import { renderHabitsScreen } from './ui/screens/HabitsScreen';
 import { renderSettingsScreen, type SettingsScreenRepos } from './ui/screens/SettingsScreen';
+import { renderPhotoScanScreen, type PhotoScanScreenRepos } from './ui/screens/PhotoScanScreen';
 import { CapgoHealthConnectAdapter } from './integrations/healthConnect/CapgoHealthConnectAdapter';
 
 const storage = new PreferencesStorageAdapter();
@@ -27,10 +28,14 @@ const profile = new ProfileRepo(storage);
 const dayRepos: DayScreenRepos = { dayHistory, sport, foodLog, plaisir, habits, profile };
 const weekRepos: WeekScreenRepos = { dayHistory, carbHistory, plaisir, sport, profile };
 const settingsRepos: SettingsScreenRepos = { dayHistory, carbHistory, plaisir, sport, habits, foodLog, profile };
+const photoScanRepos: PhotoScanScreenRepos = { habits, foodLog };
 
-type TabId = 'day' | 'week' | 'habits' | 'settings';
+// "Scan" sits right after "Jour" — photo entry is the primary adoption driver for this
+// app (see project memory), not a secondary feature bolted on after the core screens.
+type TabId = 'day' | 'scan' | 'week' | 'habits' | 'settings';
 const TABS: { id: TabId; label: string; render: (el: HTMLElement) => void }[] = [
   { id: 'day', label: 'Jour', render: (el) => renderDayScreen(el, dayRepos, healthConnect) },
+  { id: 'scan', label: '📷 Scan', render: (el) => renderPhotoScanScreen(el, photoScanRepos) },
   { id: 'week', label: 'Semaine', render: (el) => renderWeekScreen(el, weekRepos) },
   { id: 'habits', label: 'Habitudes', render: (el) => renderHabitsScreen(el, { habits }) },
   { id: 'settings', label: 'Réglages', render: (el) => renderSettingsScreen(el, settingsRepos, storage) },

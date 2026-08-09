@@ -49,6 +49,14 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
         <h2>📥 Migration / Restauration</h2>
         <div id="settings-import"></div>
       </div>
+
+      <div class="card">
+        <h2>ℹ️ À propos</h2>
+        <p class="empty-hint" style="padding:0">
+          Données de composition nutritionnelle (scan photo) : ANSES-CIQUAL 2020,
+          Licence Ouverte / Etalab.
+        </p>
+      </div>
     `;
 
     renderExportScreen(container.querySelector<HTMLDivElement>('#settings-export')!, storage);

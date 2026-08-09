@@ -16,11 +16,13 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",
+    "@capacitor/camera": "^8.2.2",
     "@capacitor/cli": "^7.6.8",
     "@capacitor/clipboard": "^8.0.1",
     "@capacitor/core": "^8.5.0",
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/share": "^8.0.1",
-    "@capgo/capacitor-health": "^8.10.1"
+    "@capgo/capacitor-health": "^8.10.1",
+    "fuse.js": "^7.5.0"
   }
 }
