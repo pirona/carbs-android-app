@@ -14,6 +14,8 @@ import { renderHabitsScreen } from './ui/screens/HabitsScreen';
 import { renderSettingsScreen, type SettingsScreenRepos } from './ui/screens/SettingsScreen';
 import { renderPhotoScanScreen, type PhotoScanScreenRepos } from './ui/screens/PhotoScanScreen';
 import { CapgoHealthConnectAdapter } from './integrations/healthConnect/CapgoHealthConnectAdapter';
+import { ThemeRepo } from './storage/repos/themeRepo';
+import { applyTheme } from './ui/theme';
 
 const storage = new PreferencesStorageAdapter();
 const healthConnect = new CapgoHealthConnectAdapter();
@@ -24,10 +26,15 @@ const sport = new SportRepo(storage);
 const habits = new HabitsRepo(storage);
 const foodLog = new FoodLogRepo(storage);
 const profile = new ProfileRepo(storage);
+const theme = new ThemeRepo(storage);
+
+// Applied as early as possible — a brief flash of the default theme before the stored
+// preference loads is an acceptable tradeoff for Preferences' async-only read API.
+theme.load().then(applyTheme);
 
 const dayRepos: DayScreenRepos = { dayHistory, sport, foodLog, plaisir, habits, profile };
 const weekRepos: WeekScreenRepos = { dayHistory, carbHistory, plaisir, sport, profile };
-const settingsRepos: SettingsScreenRepos = { dayHistory, carbHistory, plaisir, sport, habits, foodLog, profile };
+const settingsRepos: SettingsScreenRepos = { dayHistory, carbHistory, plaisir, sport, habits, foodLog, profile, theme };
 const photoScanRepos: PhotoScanScreenRepos = { habits, foodLog };
 
 // "Scan" sits right after "Jour" — photo entry is the primary adoption driver for this

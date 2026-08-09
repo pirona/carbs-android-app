@@ -5,19 +5,40 @@ import type { Profile } from '../../core/types';
 import type { ProfileRepo } from '../../storage/repos/profileRepo';
 import type { StorageAdapter } from '../../storage/StorageAdapter';
 import type { ImportRepos } from '../../migration/importExport';
+import { DEFAULT_THEME, type ThemeMode, type ThemeRepo, type ThemeSettings } from '../../storage/repos/themeRepo';
+import { applyTheme } from '../theme';
 import { renderExportScreen } from './ExportScreen';
 import { renderImportScreen } from './ImportScreen';
 
 export interface SettingsScreenRepos extends ImportRepos {
   profile: ProfileRepo;
+  theme: ThemeRepo;
 }
+
+const MODE_LABEL: Record<ThemeMode, string> = { auto: 'Auto', light: 'Clair', dark: 'Sombre' };
 
 export function renderSettingsScreen(container: HTMLElement, repos: SettingsScreenRepos, storage: StorageAdapter): void {
   let profile: Profile;
+  let theme: ThemeSettings = DEFAULT_THEME;
 
   function render() {
     container.innerHTML = `
       <h1 style="margin-bottom:10px">Réglages</h1>
+
+      <div class="card">
+        <h2>🎨 Thème</h2>
+        <label class="field-label">Apparence</label>
+        <div class="sort-toggle" style="margin-bottom:10px">
+          ${(['auto', 'light', 'dark'] as ThemeMode[])
+            .map((m) => `<button class="sort-btn ${theme.mode === m ? 'active' : ''}" data-action="theme-mode" data-mode="${m}">${MODE_LABEL[m]}</button>`)
+            .join('')}
+        </div>
+        <label class="field-label">Couleur d'accent</label>
+        <input type="range" id="s-accent-hue" min="0" max="360" value="${theme.accentHue}" style="width:100%">
+        <div class="empty-hint" style="padding-top:4px">
+          <span class="day-badge" style="background:var(--accent)">Aperçu</span>
+        </div>
+      </div>
 
       <div class="card">
         <h2>👤 Profil</h2>
@@ -64,6 +85,15 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
   }
 
   container.addEventListener('click', async (e) => {
+    const modeBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-action="theme-mode"]');
+    if (modeBtn) {
+      theme = { ...theme, mode: modeBtn.dataset.mode as ThemeMode };
+      applyTheme(theme);
+      await repos.theme.save(theme);
+      render();
+      return;
+    }
+
     const target = (e.target as HTMLElement).closest<HTMLElement>('[data-action="save-profile"]');
     if (!target) return;
     const msgEl = container.querySelector<HTMLDivElement>('#settings-msg')!;
@@ -89,8 +119,18 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
     }, 2000);
   });
 
+  container.addEventListener('input', async (e) => {
+    const hueInput = e.target as HTMLElement;
+    if (hueInput.id !== 's-accent-hue') return;
+    const accentHue = parseInt((hueInput as HTMLInputElement).value, 10);
+    theme = { ...theme, accentHue };
+    applyTheme(theme);
+    await repos.theme.save(theme);
+  });
+
   (async () => {
     profile = await repos.profile.load();
+    theme = await repos.theme.load();
     render();
   })();
 }

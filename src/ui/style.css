@@ -1,21 +1,80 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* Palette matches the old HA pages (carb-cycling.html) for visual continuity during migration. */
+/*
+ * Design system v2 (2026-08-09 redesign) — monochrome + one user-configurable accent.
+ *
+ * Everything structural (surfaces, text, borders) is strict grayscale. The single accent
+ * hue (--accent-h, set at runtime from ThemeRepo — see main.ts) drives not just buttons/
+ * highlights but the whole "meaningful color" family below it: day-type and macro colors
+ * are hue *rotations* around the user's accent rather than independent hardcoded colors,
+ * so picking a new accent reshuffles the app's entire color language coherently instead of
+ * leaving four unrelated hardcoded hues behind.
+ */
+@font-face {
+  font-family: 'Orbitron';
+  src: url('./fonts/orbitron.woff2') format('woff2');
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  --bg: #242e42;
-  --surface: #2b374e;
-  --surface2: #20293c;
-  --text: #ffffff;
-  --text-muted: #bac0c6;
-  --high: #00ca8b;
-  --medium: #1a89f5;
-  --low: #7c6fcd;
-  --plaisir: #fc937e;
-  --bad: #fc937e;
-  --protein: #89b3f8;
-  --fat: #f7d88b;
-  --carb: #00ca8b;
-  --border: #1d2638;
-  --radius: 10px;
+  /* ── Light mode (default) ─────────────────────────────────────────────── */
+  --bg: #f6f6f8;
+  --surface: #ffffff;
+  --surface2: #ececef;
+  --text: #0a0a0c;
+  --text-muted: #63636b;
+  --border: #dadade;
+  --grid-line: rgb(10 10 12 / 4%);
+  --bad: #d1373f;
+
+  /* ── Accent — single user-configurable hue, everything else derives from it ── */
+  --accent-h: 165;
+  --accent-s: 75%;
+  --accent-l: 38%;
+  --accent: hsl(var(--accent-h) var(--accent-s) var(--accent-l));
+  --accent-glow: hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 45%);
+  --accent-wash: hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 12%);
+  --on-accent: #ffffff;
+
+  /* Day-type + macro families — rotations/shades around --accent, not separate hues. */
+  --high: var(--accent);
+  --medium: hsl(calc(var(--accent-h) + 35) var(--accent-s) var(--accent-l));
+  --low: hsl(calc(var(--accent-h) - 35) calc(var(--accent-s) - 15%) calc(var(--accent-l) - 3%));
+  --plaisir: hsl(calc(var(--accent-h) + 180) var(--accent-s) calc(var(--accent-l) + 8%));
+  --protein: hsl(calc(var(--accent-h) + 20) var(--accent-s) var(--accent-l));
+  --fat: hsl(calc(var(--accent-h) - 55) calc(var(--accent-s) - 10%) calc(var(--accent-l) + 8%));
+  --carb: var(--accent);
+
+  --radius: 6px;
+  --radius-sm: 3px;
+  --radius-pill: 999px;
+  --font-display: 'Orbitron', -apple-system, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+}
+
+/* Dark mode: system preference by default, explicit override via data-theme wins either way. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #08080a;
+    --surface: #131316;
+    --surface2: #1c1c21;
+    --text: #f5f5f7;
+    --text-muted: #96969f;
+    --border: #27272d;
+    --grid-line: rgb(255 255 255 / 5%);
+    --accent-l: 55%;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: #08080a;
+  --surface: #131316;
+  --surface2: #1c1c21;
+  --text: #f5f5f7;
+  --text-muted: #96969f;
+  --border: #27272d;
+  --grid-line: rgb(255 255 255 / 5%);
+  --accent-l: 55%;
 }
 
 * {
@@ -25,7 +84,9 @@
 }
 
 body {
-  background: var(--bg);
+  background-color: var(--bg);
+  background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 24px 24px;
   color: var(--text);
   font-family: -apple-system, 'Inter', sans-serif;
   font-size: 14px;
@@ -33,14 +94,18 @@ body {
 }
 
 h1 {
-  font-size: 18px;
+  font-family: var(--font-display);
+  font-size: 19px;
   font-weight: 700;
+  letter-spacing: 0.4px;
   margin-bottom: 4px;
 }
 
 h2 {
-  font-size: 15px;
+  font-family: var(--font-display);
+  font-size: 14px;
   font-weight: 600;
+  letter-spacing: 0.3px;
   margin-bottom: 8px;
 }
 
@@ -49,6 +114,35 @@ h3 {
   font-weight: 600;
   color: var(--text-muted);
   margin-bottom: 4px;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+#screen > * {
+  animation: fade-in-up 0.25s ease-out both;
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    text-shadow: 0 0 6px var(--accent-glow);
+  }
+  50% {
+    text-shadow: 0 0 14px var(--accent-glow);
+  }
+}
+
+.glow {
+  animation: glow-pulse 3s ease-in-out infinite;
 }
 
 p.hint {
@@ -63,6 +157,7 @@ p.hint {
   padding: 14px;
   margin-bottom: 12px;
   border: 1px solid var(--border);
+  transition: border-color 0.2s ease;
 }
 
 textarea {
@@ -71,9 +166,9 @@ textarea {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 10px;
-  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   resize: vertical;
 }
@@ -84,20 +179,22 @@ textarea {
 .btn {
   padding: 8px 10px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 700;
   background: var(--surface2);
   color: var(--text-muted);
+  transition: opacity 0.15s ease, transform 0.1s ease;
 }
 
 .btn:active {
   opacity: 0.7;
+  transform: scale(0.98);
 }
 
 .btn-add {
   background: var(--medium);
-  color: #fff;
+  color: var(--on-accent);
   width: 100%;
   padding: 10px 16px;
   font-size: 13px;
@@ -106,11 +203,12 @@ textarea {
 
 .btn-cta {
   background: var(--high);
-  color: #0b1220;
+  color: var(--on-accent);
   width: 100%;
   padding: 10px 16px;
   font-size: 13px;
   margin-top: 10px;
+  box-shadow: 0 0 0 1px var(--accent-glow);
 }
 
 .btn-secondary {
@@ -130,7 +228,7 @@ textarea {
 
 .btn-save {
   background: var(--high);
-  color: #0d1a2d;
+  color: var(--on-accent);
 }
 
 .btn-cancel {
@@ -160,12 +258,26 @@ select {
   width: 100%;
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text);
   padding: 8px 10px;
   font-size: 13px;
   outline: none;
   margin-bottom: 8px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Numeric/"readout" fields get the mono font — reinforces the data/HUD feel without
+   making free-text names (habit labels etc.) harder to read. */
+input[type='number'] {
+  font-family: var(--font-mono);
+}
+
+input[type='text']:focus,
+input[type='number']:focus,
+select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-wash);
 }
 
 label.field-label {
@@ -197,18 +309,19 @@ label.field-label {
 
 .sort-btn {
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--surface2);
   color: var(--text-muted);
   font-size: 10px;
   font-weight: 700;
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
 
 .sort-btn.active {
-  border-color: var(--medium);
-  background: rgba(26, 137, 245, 0.15);
-  color: var(--medium);
+  border-color: var(--accent);
+  background: var(--accent-wash);
+  color: var(--accent);
 }
 
 .habit-row {
@@ -281,9 +394,9 @@ label.field-label {
 }
 
 .ai-banner {
-  background: rgba(124, 111, 205, 0.12);
+  background: color-mix(in srgb, var(--low) 12%, transparent);
   border: 1px solid var(--low);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 8px 10px;
   margin-bottom: 10px;
   font-size: 11px;
@@ -353,11 +466,14 @@ label.field-label {
   flex: 1 0 auto;
   padding: 10px 12px;
   border: none;
-  border-radius: 8px;
-  font-size: 12px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-size: 11px;
   font-weight: 700;
-  background: var(--high);
-  color: #0b1220;
+  letter-spacing: 0.3px;
+  background: var(--accent);
+  color: var(--on-accent);
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 #tabs button.inactive {
@@ -379,11 +495,13 @@ label.field-label {
 }
 
 .day-badge {
+  font-family: var(--font-display);
   font-size: 11px;
   font-weight: 700;
   padding: 4px 10px;
-  border-radius: 20px;
-  letter-spacing: 0.4px;
+  border-radius: var(--radius-pill);
+  letter-spacing: 0.6px;
+  color: var(--on-accent);
 }
 
 .inline-input-row {
@@ -402,8 +520,10 @@ label.field-label {
 }
 
 .kcal-total {
-  font-size: 30px;
+  font-family: var(--font-display);
+  font-size: 32px;
   font-weight: 800;
+  letter-spacing: 0.5px;
   text-align: center;
 }
 
@@ -440,11 +560,13 @@ label.field-label {
   background: var(--border);
   border-radius: 2px;
   margin-top: 4px;
+  overflow: hidden;
 }
 
 .macro-bar {
   height: 100%;
   border-radius: 2px;
+  transition: width 0.4s ease-out;
 }
 
 .plaisir-row {
@@ -455,18 +577,19 @@ label.field-label {
 .plaisir-btn {
   flex: 1;
   padding: 6px 4px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--surface2);
   color: var(--text-muted);
   font-size: 11px;
   line-height: 1.3;
   text-align: center;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
 .plaisir-btn.active {
   border-color: var(--plaisir);
-  background: rgba(252, 147, 126, 0.15);
+  background: color-mix(in srgb, var(--plaisir) 15%, transparent);
   color: var(--plaisir);
 }
 
@@ -491,13 +614,15 @@ label.field-label {
 .goal-bar-track {
   height: 8px;
   background: var(--surface2);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .goal-bar-fill {
   height: 100%;
-  background: var(--high);
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+  transition: width 0.4s ease-out;
 }
 
 .chip-row {
@@ -511,12 +636,17 @@ label.field-label {
   background: var(--surface2);
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   padding: 6px 12px;
   font-size: 12px;
   font-weight: 600;
   width: auto;
   margin-top: 0;
+  transition: border-color 0.15s ease;
+}
+
+.chip:active {
+  border-color: var(--accent);
 }
 
 .checkbox-label {
@@ -628,7 +758,7 @@ input.log-entry-portion {
 }
 
 .today-row {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--accent-wash);
 }
 
 .week-totals-row {
@@ -654,4 +784,5 @@ input.log-entry-portion {
 .progress-bar-fill {
   height: 100%;
   background: var(--medium);
+  transition: width 0.4s ease-out;
 }
