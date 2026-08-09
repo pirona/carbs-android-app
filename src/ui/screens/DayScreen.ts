@@ -15,6 +15,7 @@ import { computeFoodMacros } from '../../core/calc/food';
 import { calcWeightGoalProgress } from '../../core/calc/weightGoal';
 import { formatDateKey } from '../../core/calc/date';
 import { searchOFF, type OffProduct } from '../../integrations/openFoodFacts';
+import { parseFoodText } from '../../integrations/n8nFoodParse';
 import { escapeHtml, fmt1 } from '../util';
 
 export interface DayScreenRepos extends DayTrackingRepos {
@@ -29,12 +30,18 @@ interface LogFormState {
   loading: boolean;
   error: string | null;
   saveAsHabit: boolean;
+  aiQuery: string;
+  aiLoading: boolean;
+  aiError: string | null;
   prefill?: {
     label: string;
     off_code: string | null;
     source: Habit['source'];
     portion_g: number;
     per100: { kcal: number; protein_g: number; fat_g: number; carb_g: number };
+    ai_source_text?: string;
+    ai_confidence?: string | null;
+    ai_note?: string | null;
   };
 }
 
@@ -183,6 +190,15 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
             )
             .join('')}
           ${f.results.length === 0 && !f.loading && f.query ? '<div class="empty-hint">Aucun résultat.</div>' : ''}
+
+          <div class="form-block">
+            <label class="field-label">🤖 Décrire en langage naturel (si absent d'OpenFoodFacts)</label>
+            <input type="text" id="log-ai-query" placeholder="ex: 2 mugs de café, 350g café moulu au total" value="${escapeHtml(f.aiQuery)}">
+            <button class="btn btn-add" style="background:var(--low)" data-action="log-ai-interpret">Interpréter avec l'IA</button>
+            ${f.aiLoading ? '<div class="empty-hint">Interprétation en cours…</div>' : ''}
+            ${f.aiError ? `<div class="empty-hint error-text">${escapeHtml(f.aiError)}</div>` : ''}
+          </div>
+
           <div class="form-actions">
             <button class="btn btn-cancel" data-action="log-close">Annuler</button>
             <button class="btn" data-action="log-manual">Saisir à la main →</button>
@@ -192,6 +208,17 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
     const p = f.prefill!;
     return `
       <div class="form-block">
+        ${
+          p.source === 'ai'
+            ? `
+          <div class="ai-banner">
+            <div class="ai-banner-title">🤖 Estimation IA — à vérifier</div>
+            <div>Entrée : « ${escapeHtml(p.ai_source_text)} »</div>
+            ${p.ai_confidence ? `<div>Confiance : ${escapeHtml(p.ai_confidence)}</div>` : ''}
+            ${p.ai_note ? `<div>Remarque : ${escapeHtml(p.ai_note)}</div>` : ''}
+          </div>`
+            : ''
+        }
         <label class="field-label">Nom</label>
         <input type="text" id="log-f-label" value="${escapeHtml(p.label)}">
         <div class="field-row">
@@ -427,7 +454,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       return;
     }
     if (action === 'log-open') {
-      logForm = { step: 'search', query: '', results: [], loading: false, error: null, saveAsHabit: false };
+      logForm = { step: 'search', query: '', results: [], loading: false, error: null, saveAsHabit: false, aiQuery: '', aiLoading: false, aiError: null };
       render();
       container.querySelector<HTMLInputElement>('#log-off-query')?.focus();
       return;
@@ -459,6 +486,33 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       const p = logForm.results[Number(target.dataset.index)];
       logForm.step = 'confirm';
       logForm.prefill = { label: p.name, off_code: p.code, source: 'off', portion_g: 100, per100: p.per100 };
+      render();
+      return;
+    }
+    if (action === 'log-ai-interpret') {
+      const text = container.querySelector<HTMLInputElement>('#log-ai-query')?.value.trim() ?? '';
+      if (!text || !logForm) return;
+      logForm.aiQuery = text;
+      logForm.aiLoading = true;
+      logForm.aiError = null;
+      render();
+      try {
+        const result = await parseFoodText(text);
+        logForm.step = 'confirm';
+        logForm.prefill = {
+          label: result.label,
+          off_code: null,
+          source: 'ai',
+          portion_g: result.portion_g,
+          per100: result.per100,
+          ai_source_text: text,
+          ai_confidence: result.confidence,
+          ai_note: result.note,
+        };
+      } catch (e) {
+        logForm.aiError = `Interprétation impossible (${(e as Error).message}) — réessaie ou saisis à la main.`;
+      }
+      logForm.aiLoading = false;
       render();
       return;
     }

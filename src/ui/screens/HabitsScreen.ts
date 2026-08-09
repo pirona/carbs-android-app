@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Port of food-habits.html's library CRUD screen — OFF search + manual entry.
-// AI text interpretation is deferred to Phase 5 (Parité texte/IA), not built here.
-// Cross-device sync (pushHabitsToRemote/syncHabitsFromRemote) is dropped — no
-// cross-device sync in this app.
+// Port of food-habits.html's library CRUD screen — OFF search, AI text interpretation
+// (Phase 5), and manual entry. Cross-device sync (pushHabitsToRemote/syncHabitsFromRemote)
+// is dropped — no cross-device sync in this app.
 import type { HabitsRepo, HabitSortMode } from '../../storage/repos/habitsRepo';
 import type { DayType, Habit, Per100 } from '../../core/types';
 import { searchOFF, type OffProduct } from '../../integrations/openFoodFacts';
+import { parseFoodText } from '../../integrations/n8nFoodParse';
 import { computeFoodMacros } from '../../core/calc/food';
 import { escapeHtml, fmt1 } from '../util';
 
@@ -17,6 +17,9 @@ interface FormState {
   results: OffProduct[];
   loading: boolean;
   error: string | null;
+  aiQuery: string;
+  aiLoading: boolean;
+  aiError: string | null;
   prefill?: {
     label: string;
     off_code: string | null;
@@ -25,6 +28,9 @@ interface FormState {
     per100: Per100;
     day_type_tag: DayType | null;
     meal_slot: Habit['meal_slot'];
+    ai_source_text?: string;
+    ai_confidence?: string | null;
+    ai_note?: string | null;
   };
 }
 
@@ -88,6 +94,15 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
           )
           .join('')}
         ${f.results.length === 0 && !f.loading && f.query ? '<div class="empty-hint">Aucun résultat.</div>' : ''}
+
+        <div class="form-block">
+          <label class="field-label">🤖 Décrire en langage naturel (si absent d'OpenFoodFacts)</label>
+          <input type="text" id="ai-query" placeholder="ex: 2 mugs de café, 350g café moulu au total" value="${escapeHtml(f.aiQuery)}">
+          <button class="btn btn-add" style="background:var(--low)" data-action="ai-interpret">Interpréter avec l'IA</button>
+          ${f.aiLoading ? '<div class="empty-hint">Interprétation en cours…</div>' : ''}
+          ${f.aiError ? `<div class="empty-hint error-text">${escapeHtml(f.aiError)}</div>` : ''}
+        </div>
+
         <div class="form-actions">
           <button class="btn btn-cancel" data-action="close-form">Annuler</button>
           <button class="btn" data-action="manual-entry">Saisir à la main →</button>
@@ -99,6 +114,17 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
     const p = f.prefill!;
     return `
       <div class="form-block">
+        ${
+          p.source === 'ai'
+            ? `
+          <div class="ai-banner">
+            <div class="ai-banner-title">🤖 Estimation IA — à vérifier</div>
+            <div>Entrée : « ${escapeHtml(p.ai_source_text)} »</div>
+            ${p.ai_confidence ? `<div>Confiance : ${escapeHtml(p.ai_confidence)}</div>` : ''}
+            ${p.ai_note ? `<div>Remarque : ${escapeHtml(p.ai_note)}</div>` : ''}
+          </div>`
+            : ''
+        }
         <label class="field-label">Nom</label>
         <input type="text" id="f-label" value="${escapeHtml(p.label)}">
         <div class="field-row">
@@ -199,6 +225,35 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
     render();
   }
 
+  async function doAIInterpret() {
+    const text = container.querySelector<HTMLInputElement>('#ai-query')?.value.trim() ?? '';
+    if (!text || !form) return;
+    form.aiQuery = text;
+    form.aiLoading = true;
+    form.aiError = null;
+    render();
+    try {
+      const result = await parseFoodText(text);
+      form.step = 'confirm';
+      form.prefill = {
+        label: result.label,
+        off_code: null,
+        source: 'ai',
+        portion_g: result.portion_g,
+        per100: result.per100,
+        day_type_tag: null,
+        meal_slot: null,
+        ai_source_text: text,
+        ai_confidence: result.confidence,
+        ai_note: result.note,
+      };
+    } catch (e) {
+      form.aiError = `Interprétation impossible (${(e as Error).message}) — réessaie ou saisis à la main.`;
+    }
+    form.aiLoading = false;
+    render();
+  }
+
   function useManualEntry() {
     if (!form) return;
     form.step = 'confirm';
@@ -225,6 +280,9 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
       results: [],
       loading: false,
       error: null,
+      aiQuery: '',
+      aiLoading: false,
+      aiError: null,
       prefill: {
         label: h.label,
         off_code: h.off_code,
@@ -293,7 +351,7 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
     const action = target.dataset.action;
     switch (action) {
       case 'add':
-        form = { mode: 'add', step: 'search', query: '', results: [], loading: false, error: null };
+        form = { mode: 'add', step: 'search', query: '', results: [], loading: false, error: null, aiQuery: '', aiLoading: false, aiError: null };
         render();
         break;
       case 'close-form':
@@ -310,6 +368,9 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
         break;
       case 'select-product':
         selectProduct(Number(target.dataset.index));
+        break;
+      case 'ai-interpret':
+        doAIInterpret();
         break;
       case 'manual-entry':
         useManualEntry();

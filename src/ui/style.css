@@ -280,6 +280,22 @@ label.field-label {
   color: var(--bad);
 }
 
+.ai-banner {
+  background: rgba(124, 111, 205, 0.12);
+  border: 1px solid var(--low);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.ai-banner-title {
+  color: var(--low);
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+
 .footer {
   text-align: center;
   margin-top: 4px;
