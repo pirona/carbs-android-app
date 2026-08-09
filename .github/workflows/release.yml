@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build:
+    # Gitea (source of truth, no runner) mirrors to this GitHub repo — guard against ever
+    # running here if Gitea grows a runner later.
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history, needed for the changelog diff below
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21' # Gradle 8.x doesn't support newer JDKs, see build-debug.sh
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build web assets
+        run: npm run build
+
+      - name: Sync into Android project
+        run: npx cap sync android
+
+      - name: Build debug APK
+        # Unsigned/debug build — this is a personal-use app installed by hand (adb / manual
+        # APK transfer), not distributed via Play Store, so there's no release keystore.
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${{ github.ref_name }}$" | head -1)
+
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..HEAD"
+          else
+            RANGE="HEAD"
+          fi
+
+          FEATS=$(git log "$RANGE" --pretty=format:"%s" --no-merges \
+            | grep -E "^feat(\([^)]+\))?: " \
+            | sed -E 's/^feat(\([^)]+\))?: //' \
+            | sed 's/^/- /')
+
+          FIXES=$(git log "$RANGE" --pretty=format:"%s" --no-merges \
+            | grep -E "^fix(\([^)]+\))?: " \
+            | sed -E 's/^fix(\([^)]+\))?: //' \
+            | sed 's/^/- /')
+
+          {
+            echo "body<<CHANGELOG_EOF"
+            if [ -n "$FEATS" ]; then echo "### Nouveautés"; echo "$FEATS"; echo; fi
+            if [ -n "$FIXES" ]; then echo "### Corrections"; echo "$FIXES"; echo; fi
+            if [ -z "$FEATS" ] && [ -z "$FIXES" ]; then echo "Voir l'historique des commits."; fi
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Rename APK with version
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "carbs-${{ github.ref_name }}-debug.apk"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: carbs-${{ github.ref_name }}-debug.apk
+          body: ${{ steps.changelog.outputs.body }}
