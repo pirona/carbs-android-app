@@ -15,8 +15,8 @@ export function renderExportScreen(container: HTMLElement, storage: StorageAdapt
     <div class="card">
       <div class="counts" id="export-counts">Lecture…</div>
     </div>
-    <button id="export-share">📤 Partager</button>
-    <button class="secondary" id="export-copy">📋 Copier</button>
+    <button class="btn-cta" id="export-share">📤 Partager</button>
+    <button class="btn-secondary" id="export-copy">📋 Copier</button>
     <div class="msg" id="export-msg"></div>
   `;
 

@@ -14,11 +14,11 @@ export function renderImportScreen(container: HTMLElement, repos: ImportRepos): 
     <div class="card">
       <textarea id="import-input" placeholder='{"day_history": [...], ...}'></textarea>
     </div>
-    <button id="import-preview">👁️ Prévisualiser</button>
+    <button class="btn-cta" id="import-preview">👁️ Prévisualiser</button>
     <div class="card" id="import-preview-card" style="display:none">
       <div class="counts" id="import-counts"></div>
     </div>
-    <button id="import-confirm" style="display:none">✅ Confirmer l'import</button>
+    <button class="btn-cta" id="import-confirm" style="display:none">✅ Confirmer l'import</button>
     <div class="msg" id="import-msg"></div>
   `;
 

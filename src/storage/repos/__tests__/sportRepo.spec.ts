@@ -23,6 +23,13 @@ describe('SportRepo — sport_kcal (daily reset)', () => {
     const repo = new SportRepo(new InMemoryStorageAdapter());
     expect(await repo.loadSportKcal(TODAY)).toBeNull();
   });
+
+  it('clearSportKcal removes the value entirely', async () => {
+    const repo = new SportRepo(new InMemoryStorageAdapter());
+    await repo.saveSportKcal(300, TODAY);
+    await repo.clearSportKcal();
+    expect(await repo.loadSportKcal(TODAY)).toBeNull();
+  });
 });
 
 describe('SportRepo — sport_plan (90-day trim, no daily reset)', () => {

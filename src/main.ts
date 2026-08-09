@@ -7,48 +7,48 @@ import { PlaisirRepo } from './storage/repos/plaisirRepo';
 import { SportRepo } from './storage/repos/sportRepo';
 import { HabitsRepo } from './storage/repos/habitsRepo';
 import { FoodLogRepo } from './storage/repos/foodLogRepo';
-import type { ImportRepos } from './migration/importExport';
-import { renderExportScreen } from './ui/screens/ExportScreen';
-import { renderImportScreen } from './ui/screens/ImportScreen';
+import { ProfileRepo } from './storage/repos/profileRepo';
+import { renderDayScreen, type DayScreenRepos } from './ui/screens/DayScreen';
+import { renderWeekScreen, type WeekScreenRepos } from './ui/screens/WeekScreen';
+import { renderHabitsScreen } from './ui/screens/HabitsScreen';
+import { renderSettingsScreen, type SettingsScreenRepos } from './ui/screens/SettingsScreen';
 
-// Minimal shell hosting only Export/Import for now (Phase 2). The Day/Week/Habits/
-// Settings screens land in Phase 3 and will replace this with real navigation.
 const storage = new PreferencesStorageAdapter();
-const repos: ImportRepos = {
-  dayHistory: new DayHistoryRepo(storage),
-  carbHistory: new CarbHistoryRepo(storage),
-  plaisir: new PlaisirRepo(storage),
-  sport: new SportRepo(storage),
-  habits: new HabitsRepo(storage),
-  foodLog: new FoodLogRepo(storage),
-};
+const dayHistory = new DayHistoryRepo(storage);
+const carbHistory = new CarbHistoryRepo(storage);
+const plaisir = new PlaisirRepo(storage);
+const sport = new SportRepo(storage);
+const habits = new HabitsRepo(storage);
+const foodLog = new FoodLogRepo(storage);
+const profile = new ProfileRepo(storage);
+
+const dayRepos: DayScreenRepos = { dayHistory, sport, foodLog, plaisir, habits, profile };
+const weekRepos: WeekScreenRepos = { dayHistory, carbHistory, plaisir, sport, profile };
+const settingsRepos: SettingsScreenRepos = { dayHistory, carbHistory, plaisir, sport, habits, foodLog, profile };
+
+type TabId = 'day' | 'week' | 'habits' | 'settings';
+const TABS: { id: TabId; label: string; render: (el: HTMLElement) => void }[] = [
+  { id: 'day', label: 'Jour', render: (el) => renderDayScreen(el, dayRepos) },
+  { id: 'week', label: 'Semaine', render: (el) => renderWeekScreen(el, weekRepos) },
+  { id: 'habits', label: 'Habitudes', render: (el) => renderHabitsScreen(el, { habits }) },
+  { id: 'settings', label: 'Réglages', render: (el) => renderSettingsScreen(el, settingsRepos, storage) },
+];
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
-  <div id="tabs">
-    <button id="tab-export">Export</button>
-    <button id="tab-import" class="inactive">Import</button>
-  </div>
+  <div id="tabs">${TABS.map((t) => `<button data-tab="${t.id}">${t.label}</button>`).join('')}</div>
   <div id="screen"></div>
 `;
 
-const tabExport = app.querySelector<HTMLButtonElement>('#tab-export')!;
-const tabImport = app.querySelector<HTMLButtonElement>('#tab-import')!;
 const screen = app.querySelector<HTMLDivElement>('#screen')!;
+const tabButtons = app.querySelectorAll<HTMLButtonElement>('[data-tab]');
 
-function showExport() {
-  tabExport.classList.remove('inactive');
-  tabImport.classList.add('inactive');
-  renderExportScreen(screen, storage);
+function showTab(id: TabId) {
+  const tab = TABS.find((t) => t.id === id)!;
+  tabButtons.forEach((btn) => btn.classList.toggle('inactive', btn.dataset.tab !== id));
+  tab.render(screen);
 }
 
-function showImport() {
-  tabImport.classList.remove('inactive');
-  tabExport.classList.add('inactive');
-  renderImportScreen(screen, repos);
-}
+tabButtons.forEach((btn) => btn.addEventListener('click', () => showTab(btn.dataset.tab as TabId)));
 
-tabExport.addEventListener('click', showExport);
-tabImport.addEventListener('click', showImport);
-
-showExport();
+showTab('day');

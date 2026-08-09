@@ -30,6 +30,12 @@ export class SportRepo {
     await this.storage.set(SPORT_KCAL_KEY, JSON.stringify({ date: formatDateKey(now), value }));
   }
 
+  // Port of deleteSportKcal (carb-cycling.html:2597-2608) — removes the key entirely so
+  // loadSportKcal reports null again, distinct from saving a 0 value.
+  async clearSportKcal(): Promise<void> {
+    await this.storage.remove(SPORT_KCAL_KEY);
+  }
+
   async loadSportPlan(): Promise<Record<string, number>> {
     const raw = await this.storage.get(SPORT_PLAN_KEY);
     if (!raw) return {};
