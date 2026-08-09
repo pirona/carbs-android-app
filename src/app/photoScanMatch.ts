@@ -28,6 +28,24 @@ function uid(): string {
   return `${Date.now().toString(36)}${counter.toString(36)}`;
 }
 
+const RAW_WORD = /\bcrue?s?\b/i;
+
+// A photographed plate is virtually always cooked/prepared food, but CIQUAL's fuzzy
+// match often ranks a raw ("cru") entry first — e.g. "Riz blanc, cru" (352 kcal/100g)
+// over "Riz blanc, cuit" (145 kcal/100g), a ~2.4x overestimate. Deprioritize raw
+// entries unless the detected label itself says raw. Found via the Phase 6 real-photo
+// reliability check (rice matched to the raw entry) — a real matching bug, not a
+// vision-model limitation, so worth fixing here rather than leaving for manual correction.
+function pickBestCiqualCandidate(candidates: CiqualEntry[], queryLabel: string): CiqualEntry[] {
+  if (candidates.length < 2 || RAW_WORD.test(queryLabel)) return candidates;
+  const bestNonRawIndex = candidates.findIndex((c) => !RAW_WORD.test(c.label));
+  if (bestNonRawIndex <= 0) return candidates;
+  const reordered = [...candidates];
+  const [preferred] = reordered.splice(bestNonRawIndex, 1);
+  reordered.unshift(preferred);
+  return reordered;
+}
+
 // CIQUAL auto-match (offline, instant) is tried first; falls back to Mistral's own
 // rough per-component estimate when nothing scores well enough. OFF is deliberately
 // NOT auto-searched here — it's a per-row, user-triggered action in the UI (avoids
@@ -37,7 +55,7 @@ function uid(): string {
 // into a separate chunk when a photo is actually scanned, not on every app cold start.
 export async function componentToRow(c: PlateComponent): Promise<ScanRow> {
   const { matchCiqual } = await import('../ciqual/matcher');
-  const candidates = matchCiqual(c.label, 5);
+  const candidates = pickBestCiqualCandidate(matchCiqual(c.label, 5), c.label);
   const best = candidates[0];
   if (best) {
     return {

@@ -46,6 +46,18 @@ describe('componentToRow', () => {
     expect(row.source).toBe('ai');
     expect(row.per100).toEqual({ kcal: 222, protein_g: 3, fat_g: 4, carb_g: 5 });
   });
+
+  it('prefers a cooked CIQUAL entry over a raw one for an ambiguous label like "riz"', async () => {
+    // found via the Phase 6 real-photo reliability check: "riz" was auto-matching
+    // "Riz blanc, cru" (352 kcal/100g) instead of a cooked variant (~145 kcal/100g)
+    const row = await componentToRow(component({ label: 'riz', estimated_grams: 150 }));
+    expect(row.label.toLowerCase()).not.toMatch(/\bcrue?s?\b/);
+  });
+
+  it('still returns a raw entry when the detected label itself says raw', async () => {
+    const row = await componentToRow(component({ label: 'carotte crue', estimated_grams: 80 }));
+    expect(row.label.toLowerCase()).toContain('carotte');
+  });
 });
 
 describe('tryRecognizeHabit', () => {
