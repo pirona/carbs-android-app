@@ -20,8 +20,8 @@
 
 :root {
   /* ── Light mode (default) ─────────────────────────────────────────────── */
-  --bg: #fff6ea;
-  --surface: #fffdf7;
+  --bg: #ffffff;
+  --surface: #fff6ea;
   --surface2: #f7e9d4;
   --text: #33291f;
   --text-muted: #8a7860;
