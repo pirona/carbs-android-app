@@ -24,17 +24,9 @@ mkdirSync(outDir, { recursive: true });
 const BODY = [0xff, 0xd9, 0xa0];
 const BEAK = [0xf2, 0x95, 0x4d];
 const CREAM = [0xff, 0xf6, 0xea];
-const DARK_BG = [0x22, 0x1a, 0x12];
 
 function isNearWhite(r, g, b) {
   return r > 235 && g > 235 && b > 235;
-}
-
-// The dark-theme delivery used the dark background color itself as the "unfilled"
-// placeholder (no white anywhere) — match against that instead.
-function isNearDarkBg(r, g, b) {
-  const [tr, tg, tb] = DARK_BG;
-  return Math.abs(r - tr) <= 15 && Math.abs(g - tg) <= 15 && Math.abs(b - tb) <= 15;
 }
 
 // 4-connected flood fill over pixels matching `matchFn`, iterative (stack-based) to handle
@@ -102,9 +94,7 @@ await process(join(rawDir, 'poussin-taco-master.png'), join(outDir, 'poussin-tac
 const seedsApricot = seeds1024.map(([x, y, c, l]) => [x, y, c === BODY ? CREAM : c, l]);
 await process(join(rawDir, 'icon-apricot-1024.png'), join(outDir, 'icon-apricot-1024.png'), seedsApricot);
 
-// taco-chick-dark-1024.png used the dark bg color itself as the unfilled placeholder (no white
-// anywhere in this file) — same body/beak palette as the light variants, since both are far
-// enough in lightness from the near-black background to read fine without a separate color.
-await process(join(rawDir, 'taco-chick-dark-1024.png'), join(outDir, 'taco-chick-dark-1024.png'), seeds1024, isNearDarkBg);
+// taco-chick-dark-1024.png (dark-theme variant) intentionally not processed — user rejected a
+// filled version of it (2026-08-09), no dark-theme mascot variant wanted at all for now.
 
 console.log('done');
