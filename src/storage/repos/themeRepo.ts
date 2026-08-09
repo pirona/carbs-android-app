@@ -10,7 +10,7 @@ export interface ThemeSettings {
   accentHue: number;
 }
 
-export const DEFAULT_THEME: ThemeSettings = { mode: 'auto', accentHue: 165 };
+export const DEFAULT_THEME: ThemeSettings = { mode: 'auto', accentHue: 28 };
 
 const THEME_KEY = 'theme_settings';
 
