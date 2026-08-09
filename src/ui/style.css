@@ -544,7 +544,9 @@ label.field-label {
   color: var(--text-muted);
 }
 
-.log-entry-portion {
+/* input[type='number'] (below) has higher specificity than a bare class due to its
+   attribute selector — must qualify with the element to win the width/margin override. */
+input.log-entry-portion {
   width: 56px;
   margin-bottom: 0;
   padding: 3px 5px;
