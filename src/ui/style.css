@@ -1,0 +1,139 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Palette matches the old HA pages (carb-cycling.html) for visual continuity during migration. */
+:root {
+  --bg: #242e42;
+  --surface: #2b374e;
+  --text: #ffffff;
+  --text-muted: #bac0c6;
+  --high: #00ca8b;
+  --medium: #1a89f5;
+  --border: #1d2638;
+  --radius: 10px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, 'Inter', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+h1 {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+p.hint {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-bottom: 14px;
+}
+
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+}
+
+textarea {
+  width: 100%;
+  height: 200px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 11px;
+  resize: vertical;
+}
+
+button {
+  background: var(--high);
+  color: #0b1220;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  width: 100%;
+  margin-top: 10px;
+}
+
+button.secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+button:active {
+  opacity: 0.8;
+}
+
+.counts {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.counts div {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.counts div:last-child {
+  border-bottom: none;
+}
+
+.counts span:last-child {
+  color: var(--text);
+  font-weight: 600;
+  text-align: right;
+}
+
+.msg {
+  font-size: 12px;
+  text-align: center;
+  margin-top: 6px;
+  min-height: 16px;
+}
+
+.msg.ok {
+  color: var(--high);
+}
+
+.msg.error {
+  color: #fc937e;
+}
+
+#tabs {
+  display: flex;
+  gap: 8px;
+  padding: 14px 14px 0;
+}
+
+#tabs button {
+  margin-top: 0;
+  flex: 1;
+}
+
+#tabs button.inactive {
+  background: var(--surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+#screen {
+  padding: 14px;
+}
