@@ -206,15 +206,15 @@ export function renderWeekScreen(container: HTMLElement, repos: WeekScreenRepos)
     const goal = profile.weight_goal_kg;
     const goalInRange = goal && goal >= wMin - 2 && goal <= wMax + 2;
     const goalLine = goalInRange
-      ? `<line x1="${P.l}" y1="${py(goal).toFixed(1)}" x2="${W - P.r}" y2="${py(goal).toFixed(1)}" stroke="#00ca8b" stroke-width="1" stroke-dasharray="4,3" opacity="0.6"/>`
+      ? `<line x1="${P.l}" y1="${py(goal).toFixed(1)}" x2="${W - P.r}" y2="${py(goal).toFixed(1)}" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="4,3" opacity="0.6"/>`
       : '';
     return `
       <div class="form-block">
         <div class="empty-hint" style="padding-bottom:6px">Courbe de poids (derniers jours trackés)</div>
         <svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block;overflow:visible">
           ${goalLine}
-          <polyline points="${pts}" fill="none" stroke="#1a89f5" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-          ${points.map((e, i) => `<circle cx="${px(i).toFixed(1)}" cy="${py(e.weight_kg!).toFixed(1)}" r="2.5" fill="#1a89f5"/>`).join('')}
+          <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+          ${points.map((e, i) => `<circle cx="${px(i).toFixed(1)}" cy="${py(e.weight_kg!).toFixed(1)}" r="2.5" fill="var(--accent)"/>`).join('')}
         </svg>
       </div>`;
   }

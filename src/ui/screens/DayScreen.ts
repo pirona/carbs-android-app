@@ -302,7 +302,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
     container.innerHTML = `
       <div class="day-header">
         <h1>Aujourd'hui</h1>
-        <span class="day-badge" style="background:${DAYTYPE_COLOR[dt]};color:${dt === 'low' ? '#fff' : '#0b1220'}">${DAYTYPE_LABEL[dt]}</span>
+        <span class="day-badge" style="background:${DAYTYPE_COLOR[dt]}">${DAYTYPE_LABEL[dt]}</span>
       </div>
 
       <div class="card">
