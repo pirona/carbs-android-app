@@ -324,7 +324,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
         ${
           dt !== 'plaisir'
             ? `
-          <div class="kcal-total" style="color:${DAYTYPE_COLOR[dt]}">${snap.macros.kcal !== null ? fmt(snap.macros.kcal) : '—'} <span class="kcal-unit">kcal</span></div>
+          <div class="kcal-total glow" style="color:${DAYTYPE_COLOR[dt]}">${snap.macros.kcal !== null ? fmt(snap.macros.kcal) : '—'} <span class="kcal-unit">kcal</span></div>
           <div class="empty-hint" style="padding:0">BMR ${fmt(snap.macros.bmr)} kcal · ${weight} kg</div>
           <div class="empty-hint" style="padding:0;font-style:italic">Détecté via : ${escapeHtml(snap.dayType.source)}</div>
           ${macroBars(snap.macros)}
