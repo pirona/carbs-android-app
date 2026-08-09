@@ -12,8 +12,10 @@ import { renderDayScreen, type DayScreenRepos } from './ui/screens/DayScreen';
 import { renderWeekScreen, type WeekScreenRepos } from './ui/screens/WeekScreen';
 import { renderHabitsScreen } from './ui/screens/HabitsScreen';
 import { renderSettingsScreen, type SettingsScreenRepos } from './ui/screens/SettingsScreen';
+import { CapgoHealthConnectAdapter } from './integrations/healthConnect/CapgoHealthConnectAdapter';
 
 const storage = new PreferencesStorageAdapter();
+const healthConnect = new CapgoHealthConnectAdapter();
 const dayHistory = new DayHistoryRepo(storage);
 const carbHistory = new CarbHistoryRepo(storage);
 const plaisir = new PlaisirRepo(storage);
@@ -28,7 +30,7 @@ const settingsRepos: SettingsScreenRepos = { dayHistory, carbHistory, plaisir, s
 
 type TabId = 'day' | 'week' | 'habits' | 'settings';
 const TABS: { id: TabId; label: string; render: (el: HTMLElement) => void }[] = [
-  { id: 'day', label: 'Jour', render: (el) => renderDayScreen(el, dayRepos) },
+  { id: 'day', label: 'Jour', render: (el) => renderDayScreen(el, dayRepos, healthConnect) },
   { id: 'week', label: 'Semaine', render: (el) => renderWeekScreen(el, weekRepos) },
   { id: 'habits', label: 'Habitudes', render: (el) => renderHabitsScreen(el, { habits }) },
   { id: 'settings', label: 'Réglages', render: (el) => renderSettingsScreen(el, settingsRepos, storage) },

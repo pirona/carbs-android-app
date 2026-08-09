@@ -2,13 +2,15 @@
 // Today's view — day-type badge, macro targets, weight/sport inputs, plaisir toggle,
 // weight-goal bar, and the "Aujourd'hui" direct food log. Port of carb-cycling.html's
 // main render() (day-focused parts only — semainier/history/fidelity live in WeekScreen).
-// No Health Connect yet (Phase 4): steps stays null, only sport_kcal is user-entered.
+// Health Connect (Phase 4) pre-fills steps/activeCalories when granted — never a hard
+// dependency, manual sport_kcal entry always stays the primary/overridable signal.
 import type { DayType, Habit, LogEntry, PlaisirLevel, Profile } from '../../core/types';
 import { PLAISIR_CYCLE, PLAISIR_LEVELS } from '../../core/types';
 import type { DayTrackingRepos, DaySnapshot } from '../../app/dayTracking';
 import { refreshDaySnapshot } from '../../app/dayTracking';
 import type { HabitsRepo, HabitSortMode } from '../../storage/repos/habitsRepo';
 import type { ProfileRepo } from '../../storage/repos/profileRepo';
+import type { HealthConnectAdapter, HealthConnectSignals } from '../../integrations/healthConnect/HealthConnectAdapter';
 import { computeFoodMacros } from '../../core/calc/food';
 import { calcWeightGoalProgress } from '../../core/calc/weightGoal';
 import { formatDateKey } from '../../core/calc/date';
@@ -43,15 +45,24 @@ function fmt(n: number): string {
   return Math.round(n).toLocaleString('fr-FR');
 }
 
-export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos): void {
+export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, health: HealthConnectAdapter): void {
   let profile: Profile;
   let snapshot: DaySnapshot | null = null;
   let habits: Habit[] = [];
   let habitSortMode: HabitSortMode = 'alpha';
   let logEntries: LogEntry[] = [];
   let logForm: LogFormState | null = null;
+  let hcAvailable = false;
+  let hcGranted = false;
+  let hcSignals: HealthConnectSignals = { steps: null, activeCaloriesKcal: null };
 
   const now = () => new Date();
+
+  async function refreshHealthConnect() {
+    hcAvailable = await health.isAvailable();
+    hcGranted = hcAvailable && (await health.hasStepsPermission());
+    hcSignals = hcGranted ? await health.readToday() : { steps: null, activeCaloriesKcal: null };
+  }
 
   async function refresh() {
     const sportKcal = await repos.sport.loadSportKcal(now());
@@ -59,7 +70,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos): 
     snapshot = await refreshDaySnapshot(
       repos,
       profile,
-      { steps: null, sportKcal, activeCaloriesKcal: null, exerciseMin: null },
+      { steps: hcSignals.steps, sportKcal, activeCaloriesKcal: hcSignals.activeCaloriesKcal, exerciseMin: null },
       weightKg,
       now(),
     );
@@ -106,6 +117,19 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos): 
   let currentOverrideLevel: PlaisirLevel | null = null;
   function overrideLevelForToday(): PlaisirLevel | null {
     return currentOverrideLevel;
+  }
+
+  function healthConnectStatusHtml(): string {
+    if (!hcAvailable) return '';
+    if (!hcGranted) {
+      return `
+        <div class="form-block">
+          <button class="btn btn-cta" data-action="connect-health">📱 Connecter Health Connect (pas quotidiens)</button>
+        </div>`;
+    }
+    const stepsLabel = hcSignals.steps !== null ? `${fmt(hcSignals.steps)} pas` : 'pas indisponibles aujourd\'hui';
+    return `
+      <div class="form-block empty-hint" style="padding-bottom:0">📱 Health Connect : ${stepsLabel}</div>`;
   }
 
   function weightGoalCard(): string {
@@ -266,6 +290,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos): 
           <button class="btn" data-action="confirm-sport">✓</button>
           ${snap.current.sport_kcal !== null ? '<button class="btn btn-cancel" data-action="clear-sport">effacer</button>' : ''}
         </div>
+        ${healthConnectStatusHtml()}
       </div>
 
       <div class="card">
@@ -312,7 +337,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos): 
           snapshot = await refreshDaySnapshot(
             repos,
             profile,
-            { steps: null, sportKcal: await repos.sport.loadSportKcal(now()), activeCaloriesKcal: null, exerciseMin: null },
+            { steps: hcSignals.steps, sportKcal: await repos.sport.loadSportKcal(now()), activeCaloriesKcal: hcSignals.activeCaloriesKcal, exerciseMin: null },
             v,
             now(),
           );
@@ -329,6 +354,13 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos): 
     }
     if (action === 'clear-sport') {
       await withRefresh(() => repos.sport.clearSportKcal());
+      return;
+    }
+    if (action === 'connect-health') {
+      await withRefresh(async () => {
+        await health.requestPermissions();
+        await refreshHealthConnect();
+      });
       return;
     }
     if (action === 'plaisir') {
@@ -527,6 +559,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos): 
     habitSortMode = await repos.habits.loadSortMode();
     const overrides = await repos.plaisir.loadOverrides(now());
     currentOverrideLevel = overrides.levels[formatDateKey(now())] ?? null;
+    await refreshHealthConnect();
     await refresh();
     render();
   })();
