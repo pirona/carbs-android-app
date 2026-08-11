@@ -16,10 +16,25 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        debug {
+            // Fixed, checked-in debug keystore — not a secret (debug key only). Without this,
+            // AGP falls back to each machine/CI-runner's own ambient ~/.android/debug.keystore,
+            // so builds from different environments get different signatures and can't
+            // upgrade-in-place over each other (INSTALL_FAILED_UPDATE_INCOMPATIBLE).
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            signingConfig signingConfigs.debug
         }
     }
 }

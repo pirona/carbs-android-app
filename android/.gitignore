@@ -55,6 +55,9 @@ captures/
 # Keystore files — never committed, CI secret only (see README)
 *.jks
 *.keystore
+# Exception: fixed debug-only keystore, checked in on purpose so every machine/CI run signs
+# debug builds identically and can upgrade-in-place (see build.gradle signingConfigs.debug).
+!app/debug.keystore
 
 # External native build folder generated in Android Studio 2.2 and later
 .externalNativeBuild

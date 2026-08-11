@@ -11,7 +11,7 @@ import { refreshDaySnapshot } from '../../app/dayTracking';
 import type { HabitsRepo, HabitSortMode } from '../../storage/repos/habitsRepo';
 import type { ProfileRepo } from '../../storage/repos/profileRepo';
 import type { HealthConnectAdapter, HealthConnectSignals } from '../../integrations/healthConnect/HealthConnectAdapter';
-import { computeFoodMacros } from '../../core/calc/food';
+import { computeFoodMacros, kcalFromMacros } from '../../core/calc/food';
 import { calcWeightGoalProgress } from '../../core/calc/weightGoal';
 import { formatDateKey } from '../../core/calc/date';
 import { searchOFF, type OffProduct } from '../../integrations/openFoodFacts';
@@ -59,6 +59,9 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
   let habitSortMode: HabitSortMode = 'alpha';
   let logEntries: LogEntry[] = [];
   let logForm: LogFormState | null = null;
+  // Same "touched" guard as HabitsScreen.ts's #f-kcal — once the user edits #log-f-kcal
+  // directly, macro edits stop overwriting it.
+  let logKcalTouched = false;
   let hcAvailable = false;
   let hcGranted = false;
   let hcSignals: HealthConnectSignals = { steps: null, activeCaloriesKcal: null };
@@ -485,6 +488,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       if (!logForm) return;
       const p = logForm.results[Number(target.dataset.index)];
       logForm.step = 'confirm';
+      logKcalTouched = false;
       logForm.prefill = { label: p.name, off_code: p.code, source: 'off', portion_g: 100, per100: p.per100 };
       render();
       return;
@@ -499,6 +503,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       try {
         const result = await parseFoodText(text);
         logForm.step = 'confirm';
+        logKcalTouched = false;
         logForm.prefill = {
           label: result.label,
           off_code: null,
@@ -519,6 +524,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
     if (action === 'log-manual') {
       if (!logForm) return;
       logForm.step = 'confirm';
+      logKcalTouched = false;
       logForm.prefill = {
         label: logForm.query || '',
         off_code: null,
@@ -583,7 +589,19 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
   });
 
   container.addEventListener('change', async (e) => {
-    const target = e.target as HTMLElement;
+    const target = e.target as HTMLInputElement;
+    if (target.id === 'log-f-kcal') {
+      logKcalTouched = true;
+      return;
+    }
+    if (!logKcalTouched && logForm?.step === 'confirm' && ['log-f-prot', 'log-f-fat', 'log-f-carb'].includes(target.id)) {
+      const prot = parseFloat(container.querySelector<HTMLInputElement>('#log-f-prot')!.value) || 0;
+      const fat = parseFloat(container.querySelector<HTMLInputElement>('#log-f-fat')!.value) || 0;
+      const carb = parseFloat(container.querySelector<HTMLInputElement>('#log-f-carb')!.value) || 0;
+      const kcalInput = container.querySelector<HTMLInputElement>('#log-f-kcal');
+      if (kcalInput) kcalInput.value = String(kcalFromMacros(prot, fat, carb));
+      return;
+    }
     if (target.dataset.action === 'log-portion') {
       const grams = parseFloat((target as HTMLInputElement).value);
       if (isNaN(grams) || grams <= 0) return;

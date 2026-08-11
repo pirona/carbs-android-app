@@ -6,7 +6,7 @@ import type { HabitsRepo, HabitSortMode } from '../../storage/repos/habitsRepo';
 import type { DayType, Habit, Per100 } from '../../core/types';
 import { searchOFF, type OffProduct } from '../../integrations/openFoodFacts';
 import { parseFoodText } from '../../integrations/n8nFoodParse';
-import { computeFoodMacros } from '../../core/calc/food';
+import { computeFoodMacros, kcalFromMacros } from '../../core/calc/food';
 import { escapeHtml, fmt1 } from '../util';
 
 interface FormState {
@@ -56,6 +56,10 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
   let habits: Habit[] = [];
   let sortMode: HabitSortMode = 'alpha';
   let form: FormState | null = null;
+  // True once the user has directly edited #f-kcal in the open form — once touched, macro
+  // edits stop overwriting it (a printed label's kcal can legitimately differ slightly from
+  // the Atwater estimate below, e.g. fiber/rounding).
+  let kcalTouched = false;
 
   function habitRow(h: Habit): string {
     const m = computeFoodMacros(h.per100, h.portion_g);
@@ -213,6 +217,7 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
     if (!form) return;
     const p = form.results[index];
     form.step = 'confirm';
+    kcalTouched = false;
     form.prefill = {
       label: p.name,
       off_code: p.code,
@@ -235,6 +240,7 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
     try {
       const result = await parseFoodText(text);
       form.step = 'confirm';
+      kcalTouched = false;
       form.prefill = {
         label: result.label,
         off_code: null,
@@ -257,6 +263,7 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
   function useManualEntry() {
     if (!form) return;
     form.step = 'confirm';
+    kcalTouched = false;
     form.prefill = {
       label: form.query || '',
       off_code: null,
@@ -272,6 +279,7 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
   function openEditForm(id: string) {
     const h = habits.find((x) => x.id === id);
     if (!h) return;
+    kcalTouched = false;
     form = {
       mode: 'edit',
       editId: id,
@@ -344,6 +352,21 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
     await repos.habits.save(habits);
     render();
   }
+
+  container.addEventListener('change', (e) => {
+    const target = e.target as HTMLInputElement;
+    if (!form || form.step !== 'confirm') return;
+    if (target.id === 'f-kcal') {
+      kcalTouched = true;
+      return;
+    }
+    if (kcalTouched || !['f-prot', 'f-fat', 'f-carb'].includes(target.id)) return;
+    const prot = parseFloat(container.querySelector<HTMLInputElement>('#f-prot')!.value) || 0;
+    const fat = parseFloat(container.querySelector<HTMLInputElement>('#f-fat')!.value) || 0;
+    const carb = parseFloat(container.querySelector<HTMLInputElement>('#f-carb')!.value) || 0;
+    const kcalInput = container.querySelector<HTMLInputElement>('#f-kcal');
+    if (kcalInput) kcalInput.value = String(kcalFromMacros(prot, fat, carb));
+  });
 
   container.addEventListener('click', (e) => {
     const target = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
