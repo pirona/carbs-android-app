@@ -3,13 +3,15 @@
 // app's current storage (see importMerge.ts for the merge policy), and either previews
 // the result (apply:false) or commits it (apply:true) — same code path for both so the
 // preview can never lie about what a commit would actually do.
-import type { DayEntry, Habit, LogEntry, WeekEntry } from '../core/types';
+import type { DayEntry, Habit, LogEntry, Profile, WeekEntry } from '../core/types';
 import { DayHistoryRepo } from '../storage/repos/dayHistoryRepo';
 import { CarbHistoryRepo } from '../storage/repos/carbHistoryRepo';
 import { PlaisirRepo } from '../storage/repos/plaisirRepo';
 import { SportRepo } from '../storage/repos/sportRepo';
 import { HabitsRepo, type HabitSortMode } from '../storage/repos/habitsRepo';
 import { FoodLogRepo, type FoodLog } from '../storage/repos/foodLogRepo';
+import { ProfileRepo } from '../storage/repos/profileRepo';
+import { ThemeRepo, type ThemeSettings } from '../storage/repos/themeRepo';
 import { formatDateKey } from '../core/calc/date';
 import { mergeByKey, mergeByUpdatedAt, mergeRecord } from './importMerge';
 import type { PlaisirOverrides } from '../core/types';
@@ -21,6 +23,8 @@ export interface ImportRepos {
   sport: SportRepo;
   habits: HabitsRepo;
   foodLog: FoodLogRepo;
+  profile: ProfileRepo;
+  theme: ThemeRepo;
 }
 
 export interface ImportKeyResult {
@@ -166,6 +170,23 @@ export async function runImport(
     perKey.push({ key: 'food_habits_sort_mode', recognized: true, note: 'adopté' });
   } else {
     perKey.push({ key: 'food_habits_sort_mode', recognized: false, note: 'absent' });
+  }
+
+  // profile — a single preference blob, low-stakes, always adopted when present (same
+  // policy as food_habits_sort_mode below).
+  if (parsed.profile && typeof parsed.profile === 'object' && !isArray(parsed.profile)) {
+    if (apply) await repos.profile.save(parsed.profile as Profile);
+    perKey.push({ key: 'profile', recognized: true, note: 'adopté' });
+  } else {
+    perKey.push({ key: 'profile', recognized: false, note: 'absent' });
+  }
+
+  // theme_settings — same policy: single preference blob, always adopted when present.
+  if (parsed.theme_settings && typeof parsed.theme_settings === 'object' && !isArray(parsed.theme_settings)) {
+    if (apply) await repos.theme.save(parsed.theme_settings as ThemeSettings);
+    perKey.push({ key: 'theme_settings', recognized: true, note: 'adopté' });
+  } else {
+    perKey.push({ key: 'theme_settings', recognized: false, note: 'absent' });
   }
 
   return { ok: true, perKey };

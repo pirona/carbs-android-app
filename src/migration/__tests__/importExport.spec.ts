@@ -8,6 +8,8 @@ import { PlaisirRepo } from '../../storage/repos/plaisirRepo';
 import { SportRepo } from '../../storage/repos/sportRepo';
 import { HabitsRepo } from '../../storage/repos/habitsRepo';
 import { FoodLogRepo } from '../../storage/repos/foodLogRepo';
+import { ProfileRepo } from '../../storage/repos/profileRepo';
+import { ThemeRepo } from '../../storage/repos/themeRepo';
 import { getISOWeek } from '../../core/calc/date';
 import type { DayEntry } from '../../core/types';
 
@@ -20,6 +22,8 @@ function makeRepos(): ImportRepos {
     sport: new SportRepo(storage),
     habits: new HabitsRepo(storage),
     foodLog: new FoodLogRepo(storage),
+    profile: new ProfileRepo(storage),
+    theme: new ThemeRepo(storage),
   };
 }
 
@@ -166,5 +170,17 @@ describe('runImport', () => {
     const result = await runImport(repos, blob, true, NOW);
     expect(result.ok).toBe(true);
     expect(await repos.sport.loadSportKcal(NOW)).toBeNull();
+  });
+
+  it('restores profile and theme_settings from a backup', async () => {
+    const repos = makeRepos();
+    const blob = JSON.stringify({
+      profile: { height_cm: 180, age: 30, sex: 'male', weight_default_kg: 80, weight_start_kg: 85, weight_goal_kg: 75 },
+      theme_settings: { mode: 'dark', accentHue: 200 },
+    });
+    const result = await runImport(repos, blob, true, NOW);
+    expect(result.ok).toBe(true);
+    expect(await repos.profile.load()).toEqual({ height_cm: 180, age: 30, sex: 'male', weight_default_kg: 80, weight_start_kg: 85, weight_goal_kg: 75 });
+    expect(await repos.theme.load()).toEqual({ mode: 'dark', accentHue: 200 });
   });
 });
