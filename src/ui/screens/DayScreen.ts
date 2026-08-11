@@ -588,7 +588,9 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
     }
   });
 
-  container.addEventListener('change', async (e) => {
+  // 'input' fires on every keystroke (unlike 'change', which only fires on blur) — needed
+  // for the kcal-from-macros recompute to actually feel live while typing.
+  container.addEventListener('input', (e) => {
     const target = e.target as HTMLInputElement;
     if (target.id === 'log-f-kcal') {
       logKcalTouched = true;
@@ -600,8 +602,11 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       const carb = parseFloat(container.querySelector<HTMLInputElement>('#log-f-carb')!.value) || 0;
       const kcalInput = container.querySelector<HTMLInputElement>('#log-f-kcal');
       if (kcalInput) kcalInput.value = String(kcalFromMacros(prot, fat, carb));
-      return;
     }
+  });
+
+  container.addEventListener('change', async (e) => {
+    const target = e.target as HTMLInputElement;
     if (target.dataset.action === 'log-portion') {
       const grams = parseFloat((target as HTMLInputElement).value);
       if (isNaN(grams) || grams <= 0) return;

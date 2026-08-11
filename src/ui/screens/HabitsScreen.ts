@@ -353,7 +353,9 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
     render();
   }
 
-  container.addEventListener('change', (e) => {
+  // 'input' fires on every keystroke (unlike 'change', which only fires on blur) — needed
+  // for the kcal-from-macros recompute to actually feel live while typing.
+  container.addEventListener('input', (e) => {
     const target = e.target as HTMLInputElement;
     if (!form || form.step !== 'confirm') return;
     if (target.id === 'f-kcal') {
