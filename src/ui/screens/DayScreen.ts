@@ -29,6 +29,7 @@ interface LogFormState {
   query: string;
   results: OffProduct[];
   loading: boolean;
+  scanning: boolean;
   error: string | null;
   saveAsHabit: boolean;
   aiQuery: string;
@@ -181,9 +182,12 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
         <div class="form-block">
           <label class="field-label">Rechercher sur OpenFoodFacts</label>
           <input type="text" id="log-off-query" placeholder="ex: yaourt nature" value="${escapeHtml(f.query)}">
-          <button class="btn btn-add" data-action="log-search">Rechercher</button>
-          <button class="btn" data-action="log-barcode">🔖 Code-barres</button>
+          <div class="form-actions" style="margin-top:0">
+            <button class="btn btn-add" style="margin-top:0" data-action="log-search">Rechercher</button>
+            <button class="btn btn-add" style="margin-top:0;background:var(--low)" data-action="log-scan-barcode" ${f.scanning ? 'disabled' : ''}>📷 Code-barres</button>
+          </div>
           ${f.loading ? '<div class="empty-hint">Recherche en cours…</div>' : ''}
+          ${f.scanning ? '<div class="empty-hint">Scan en cours…</div>' : ''}
           ${f.error ? `<div class="empty-hint error-text">${escapeHtml(f.error)}</div>` : ''}
           ${f.results
             .map(
@@ -227,7 +231,14 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
         <label class="field-label">Nom</label>
         <input type="text" id="log-f-label" value="${escapeHtml(p.label)}">
         <div class="field-row">
-          <div><label class="field-label">Portion (g)</label><input type="number" id="log-f-portion" value="${p.portion_g}" min="1"></div>
+          <div>
+            <label class="field-label">Portion (g)</label>
+            <input type="number" id="log-f-portion" value="${p.portion_g}" min="1">
+            <div class="form-actions" style="margin:6px 0 8px">
+              <button type="button" class="btn" data-action="log-portion-multiply" data-factor="2">×2</button>
+              <button type="button" class="btn" data-action="log-portion-multiply" data-factor="3">×3</button>
+            </div>
+          </div>
           <div><label class="field-label">kcal / 100g</label><input type="number" id="log-f-kcal" value="${p.per100.kcal}" step="0.1"></div>
         </div>
         <div class="field-row">
@@ -459,7 +470,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       return;
     }
     if (action === 'log-open') {
-      logForm = { step: 'search', query: '', results: [], loading: false, error: null, saveAsHabit: false, aiQuery: '', aiLoading: false, aiError: null };
+      logForm = { step: 'search', query: '', results: [], loading: false, scanning: false, error: null, saveAsHabit: false, aiQuery: '', aiLoading: false, aiError: null };
       render();
       container.querySelector<HTMLInputElement>('#log-off-query')?.focus();
       return;
@@ -486,18 +497,24 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       render();
       return;
     }
-    if (action === 'log-barcode') {
+    if (action === 'log-scan-barcode') {
       if (!logForm) return;
+      logForm.scanning = true;
+      logForm.error = null;
+      render();
       const scan = await scanBarcode();
-      if (scan.status === 'cancelled') return;
       if (!logForm) return; // form was closed (Annuler) while the scanner was open
+      logForm.scanning = false;
+      if (scan.status === 'cancelled') {
+        render();
+        return;
+      }
       if (scan.status === 'error') {
         logForm.error = `Scan impossible (${scan.message})`;
         render();
         return;
       }
       logForm.loading = true;
-      logForm.error = null;
       render();
       const result = await lookupOFF(scan.code);
       if (!logForm) return; // form was closed while the OFF lookup was in flight
@@ -509,9 +526,24 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       } else {
         logForm.step = 'confirm';
         logKcalTouched = false;
-        logForm.prefill = { label: result.product.name, off_code: result.product.code, source: 'off', portion_g: 100, per100: result.product.per100 };
+        logForm.prefill = {
+          label: result.product.name,
+          off_code: result.product.code,
+          source: 'off',
+          portion_g: result.product.servingGrams ?? 100,
+          per100: result.product.per100,
+        };
       }
       render();
+      return;
+    }
+    if (action === 'log-portion-multiply') {
+      const factor = Number(target.dataset.factor);
+      const input = container.querySelector<HTMLInputElement>('#log-f-portion');
+      if (input && factor) {
+        const current = parseFloat(input.value) || 0;
+        input.value = String(Math.round(current * factor));
+      }
       return;
     }
     if (action === 'log-select') {
@@ -519,7 +551,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       const p = logForm.results[Number(target.dataset.index)];
       logForm.step = 'confirm';
       logKcalTouched = false;
-      logForm.prefill = { label: p.name, off_code: p.code, source: 'off', portion_g: 100, per100: p.per100 };
+      logForm.prefill = { label: p.name, off_code: p.code, source: 'off', portion_g: p.servingGrams ?? 100, per100: p.per100 };
       render();
       return;
     }

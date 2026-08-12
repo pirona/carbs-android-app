@@ -22,14 +22,27 @@ export interface FoodVisionResult {
   overall_note: string;
 }
 
+const TIMEOUT_MS = 30_000;
+
 // The photo is sent once and never written to any repo — see PhotoScanScreen, which
 // discards the base64 string from memory as soon as this call resolves or fails.
 export async function analyzePlatePhoto(imageBase64: string, mimeType: string): Promise<FoodVisionResult> {
-  const res = await fetch(N8N_FOOD_VISION_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image_base64: imageBase64, mime_type: mimeType }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(N8N_FOOD_VISION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_base64: imageBase64, mime_type: mimeType }),
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') throw new Error('délai dépassé, le serveur ne répond pas');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   if (data.error) throw new Error(data.error);

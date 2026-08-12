@@ -116,7 +116,11 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
       ${recognizedHabitLabel ? `<div class="ai-banner"><div class="ai-banner-title">🔁 Plat reconnu</div><div>Pré-rempli depuis l'habitude « ${escapeHtml(recognizedHabitLabel)} » — toujours modifiable.</div></div>` : ''}
       ${overallNote ? `<div class="ai-banner"><div class="ai-banner-title">🤖 Remarque de l'IA</div><div>${escapeHtml(overallNote)}</div></div>` : ''}
       ${rows.map(rowCard).join('')}
-      ${rows.length === 0 ? '<div class="card empty-hint">Aucun composant identifié — annule et réessaie, ou saisis à la main via "Aujourd\'hui".</div>' : ''}
+      ${
+        rows.length === 0
+          ? `<div class="card"><div class="error-text" style="font-weight:700;margin-bottom:4px">⚠️ Rien d'identifiable sur cette photo</div><div class="empty-hint" style="padding:0">L'IA n'a reconnu aucun aliment — rien n'a été enregistré. Annule et reprends la photo (assiette bien cadrée, bonne lumière), ou saisis à la main via "Aujourd'hui".</div></div>`
+          : ''
+      }
       <div class="card today-totals">
         <div>
           <div class="today-totals-kcal">${fmt(totals.kcal)} <span class="empty-hint" style="padding:0">kcal (total)</span></div>
@@ -156,9 +160,22 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
   }
 
   async function startScan() {
-    const photo = await capturePlatePhoto();
-    if (!photo) return; // user cancelled — stay idle, no error shown
+    const capture = await capturePlatePhoto();
+    if (capture.status === 'cancelled') return; // user backed out — stay idle, no error shown
     lastMode = 'photo';
+    if (capture.status === 'permission-denied') {
+      errorMsg = 'Permission appareil photo refusée — autorise l’accès dans les paramètres Android (Applis > Carbs > Autorisations) pour scanner une assiette.';
+      state = 'error';
+      render();
+      return;
+    }
+    if (capture.status === 'error') {
+      errorMsg = `Impossible d’ouvrir l’appareil photo (${capture.message}).`;
+      state = 'error';
+      render();
+      return;
+    }
+    const photo = capture.photo;
     state = 'analyzing';
     render();
     try {

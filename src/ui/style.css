@@ -86,26 +86,26 @@ body {
   background-color: var(--bg);
   color: var(--text);
   font-family: -apple-system, 'Inter', sans-serif;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.5;
 }
 
 h1 {
   font-family: var(--font-display);
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 700;
   margin-bottom: 4px;
 }
 
 h2 {
   font-family: var(--font-display);
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 600;
   margin-bottom: 8px;
 }
 
 h3 {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-muted);
   margin-bottom: 4px;
@@ -142,15 +142,15 @@ h3 {
 
 p.hint {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 14px;
   margin-bottom: 14px;
 }
 
 .card {
   background: var(--surface);
   border-radius: var(--radius);
-  padding: 14px;
-  margin-bottom: 12px;
+  padding: 16px;
+  margin-bottom: 14px;
   border: 1px solid var(--border);
   transition: border-color 0.2s ease;
 }
@@ -164,7 +164,7 @@ textarea {
   border-radius: var(--radius-sm);
   padding: 10px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   resize: vertical;
 }
 
@@ -175,7 +175,7 @@ textarea {
   padding: 8px 10px;
   border: none;
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   background: var(--surface2);
   color: var(--text-muted);
@@ -187,12 +187,16 @@ textarea {
   transform: scale(0.98);
 }
 
+.btn:disabled {
+  opacity: 0.4;
+}
+
 .btn-add {
   background: var(--medium);
   color: var(--on-accent);
   width: 100%;
   padding: 10px 16px;
-  font-size: 13px;
+  font-size: 15px;
   margin-top: 10px;
 }
 
@@ -201,7 +205,7 @@ textarea {
   color: var(--on-accent);
   width: 100%;
   padding: 10px 16px;
-  font-size: 13px;
+  font-size: 15px;
   margin-top: 10px;
   box-shadow: 0 0 0 1px var(--accent-glow);
 }
@@ -212,13 +216,13 @@ textarea {
   border: 1px solid var(--border);
   width: 100%;
   padding: 10px 16px;
-  font-size: 13px;
+  font-size: 15px;
   margin-top: 10px;
 }
 
 .btn-icon {
   padding: 6px 8px;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .btn-save {
@@ -256,7 +260,7 @@ select {
   border-radius: var(--radius-sm);
   color: var(--text);
   padding: 8px 10px;
-  font-size: 13px;
+  font-size: 15px;
   outline: none;
   margin-bottom: 8px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -276,7 +280,7 @@ select:focus {
 }
 
 label.field-label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   display: block;
   margin-bottom: 3px;
@@ -308,7 +312,7 @@ label.field-label {
   border: 1px solid var(--border);
   background: var(--surface2);
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   transition: border-color 0.15s ease, color 0.15s ease;
 }
@@ -357,7 +361,7 @@ label.field-label {
 }
 
 .habit-label {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -365,7 +369,7 @@ label.field-label {
 }
 
 .habit-sub {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
@@ -387,18 +391,18 @@ label.field-label {
 }
 
 .search-result-name {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
 }
 
 .search-result-sub {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   margin-top: 2px;
 }
 
 .empty-hint {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   padding: 6px 0;
 }
@@ -413,7 +417,7 @@ label.field-label {
   border-radius: var(--radius);
   padding: 8px 10px;
   margin-bottom: 10px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
@@ -426,13 +430,13 @@ label.field-label {
 .footer {
   text-align: center;
   margin-top: 4px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
 /* ── Export/Import screens' key-value summaries ───────────────────────── */
 .counts {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
@@ -454,7 +458,7 @@ label.field-label {
 }
 
 .msg {
-  font-size: 12px;
+  font-size: 13px;
   text-align: center;
   margin-top: 6px;
   min-height: 16px;
@@ -482,7 +486,7 @@ label.field-label {
   border: none;
   border-radius: var(--radius-sm);
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   background: var(--accent);
   color: var(--on-accent);
@@ -496,7 +500,7 @@ label.field-label {
 }
 
 #screen {
-  padding: 14px;
+  padding: 16px;
 }
 
 /* ── Day screen ────────────────────────────────────────────────────────── */
@@ -509,7 +513,7 @@ label.field-label {
 
 .day-badge {
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   padding: 4px 10px;
   border-radius: var(--radius-pill);
@@ -533,13 +537,13 @@ label.field-label {
 
 .kcal-total {
   font-family: var(--font-display);
-  font-size: 32px;
+  font-size: 36px;
   font-weight: 800;
   text-align: center;
 }
 
 .kcal-unit {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-muted);
 }
 
@@ -555,12 +559,12 @@ label.field-label {
 }
 
 .macro-value {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
 }
 
 .macro-label {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -592,7 +596,7 @@ label.field-label {
   border: 1px solid var(--border);
   background: var(--surface2);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.3;
   text-align: center;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
@@ -605,19 +609,19 @@ label.field-label {
 }
 
 .plaisir-btn-label {
-  font-size: 9px;
+  font-size: 10px;
   margin-top: 2px;
 }
 
 .plaisir-btn-kcal {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--text-muted);
 }
 
 .goal-labels {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   margin: 5px 0;
 }
@@ -649,7 +653,7 @@ label.field-label {
   color: var(--text);
   border-radius: var(--radius-pill);
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   width: auto;
   margin-top: 0;
@@ -664,7 +668,7 @@ label.field-label {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   margin-top: 6px;
 }
@@ -689,7 +693,7 @@ label.field-label {
 }
 
 .log-entry-label {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -697,7 +701,7 @@ label.field-label {
 }
 
 .log-entry-sub {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
 }
 
@@ -707,7 +711,7 @@ input.log-entry-portion {
   width: 56px;
   margin-bottom: 0;
   padding: 3px 5px;
-  font-size: 11px;
+  font-size: 12px;
   text-align: right;
 }
 
@@ -715,7 +719,7 @@ input.log-entry-portion {
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 16px;
   width: auto;
   margin-top: 0;
   padding: 2px 4px;
@@ -731,7 +735,7 @@ input.log-entry-portion {
 }
 
 .today-totals-kcal {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
 }
 
@@ -739,12 +743,12 @@ input.log-entry-portion {
 .week-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .week-table th {
   text-align: left;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   font-weight: 600;
   padding: 4px 6px;
@@ -764,7 +768,7 @@ input.log-entry-portion {
   width: 64px;
   margin-bottom: 0;
   padding: 3px 6px;
-  font-size: 11px;
+  font-size: 12px;
   text-align: right;
 }
 
@@ -775,7 +779,7 @@ input.log-entry-portion {
 .week-totals-row {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: 13px;
   padding: 4px 0;
   color: var(--text-muted);
 }

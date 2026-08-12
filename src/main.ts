@@ -54,12 +54,19 @@ app.innerHTML = `
   <div id="screen"></div>
 `;
 
-const screen = app.querySelector<HTMLDivElement>('#screen')!;
+let screen = app.querySelector<HTMLDivElement>('#screen')!;
 const tabButtons = app.querySelectorAll<HTMLButtonElement>('[data-tab]');
 
 function showTab(id: TabId) {
   const tab = TABS.find((t) => t.id === id)!;
   tabButtons.forEach((btn) => btn.classList.toggle('inactive', btn.dataset.tab !== id));
+  // Each screen module attaches its own click/change listeners directly on the container
+  // it's given (see DayScreen etc.) — reusing the same node across renders would stack a
+  // new listener on top of every previous one, firing actions multiple times per tap.
+  // Swapping in a bare clone before every render guarantees a listener-free container.
+  const fresh = screen.cloneNode(false) as HTMLDivElement;
+  screen.replaceWith(fresh);
+  screen = fresh;
   tab.render(screen);
 }
 
