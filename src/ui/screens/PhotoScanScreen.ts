@@ -11,6 +11,7 @@ import type { HabitsRepo } from '../../storage/repos/habitsRepo';
 import type { FoodLogRepo } from '../../storage/repos/foodLogRepo';
 import { capturePlatePhoto } from '../../integrations/camera';
 import { analyzePlatePhoto } from '../../integrations/n8nFoodVision';
+import { lookupOFF, scanBarcode } from '../../integrations/barcodeScan';
 import { searchOFF } from '../../integrations/openFoodFacts';
 import { componentToRow, habitToRows, tryRecognizeHabit, type RowSource, type ScanRow } from '../../app/photoScanMatch';
 import { computeFoodMacros } from '../../core/calc/food';
@@ -44,6 +45,9 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
   let recognizedHabitLabel: string | null = null;
   let errorMsg: string | null = null;
   let saveAsHabit = false;
+  // Which flow to relaunch when "Réessayer" is tapped from the error state — the two
+  // scan modes need different retry actions, so a single hardcoded button can't know.
+  let lastMode: 'photo' | 'barcode' | null = null;
 
   function rowCard(row: ScanRow, index: number): string {
     const m = computeFoodMacros(row.per100, row.portion_g);
@@ -136,13 +140,15 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
     if (state === 'idle') {
       body = `
         <p class="hint">Prends une photo de ton assiette — l'IA identifie les composants, tu ajustes et confirmes avant tout enregistrement.</p>
-        <button class="btn-cta" data-action="scan-start">📷 Scanner une assiette</button>`;
+        <button class="btn-cta" data-action="scan-start">📷 Scanner une assiette</button>
+        <p class="hint">Ou scanne directement le code-barres d'un produit emballé.</p>
+        <button class="btn-cta" data-action="scan-barcode-start">🔖 Scanner un code-barres</button>`;
     } else if (state === 'analyzing') {
       body = `<div class="card empty-hint">Analyse de la photo en cours…</div>`;
     } else if (state === 'error') {
       body = `
         <div class="card"><div class="empty-hint error-text">${escapeHtml(errorMsg ?? 'Erreur inconnue')}</div></div>
-        <button class="btn-cta" data-action="scan-start">Réessayer</button>`;
+        <button class="btn-cta" data-action="scan-reset">Réessayer</button>`;
     } else {
       body = reviewingHtml();
     }
@@ -152,6 +158,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
   async function startScan() {
     const photo = await capturePlatePhoto();
     if (!photo) return; // user cancelled — stay idle, no error shown
+    lastMode = 'photo';
     state = 'analyzing';
     render();
     try {
@@ -172,6 +179,47 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
       state = 'error';
     }
     // photo.base64 falls out of scope here — never stored anywhere else.
+    render();
+  }
+
+  async function startBarcodeScan() {
+    const scan = await scanBarcode();
+    if (scan.status === 'cancelled') return; // user backed out of the scanner — stay idle, no error shown
+    lastMode = 'barcode';
+    if (scan.status === 'error') {
+      errorMsg = `Scan impossible (${scan.message}) — réessaie.`;
+      state = 'error';
+      render();
+      return;
+    }
+    state = 'analyzing';
+    render();
+    const result = await lookupOFF(scan.code);
+    if (result.status === 'not-found') {
+      errorMsg = 'Produit introuvable pour ce code-barres — réessaie, ou utilise le scan photo/la saisie manuelle.';
+      state = 'error';
+    } else if (result.status === 'error') {
+      errorMsg = result.message;
+      state = 'error';
+    } else {
+      overallNote = '';
+      recognizedHabitLabel = null;
+      rows = [
+        {
+          key: uid(),
+          label: result.product.name,
+          portion_g: 100,
+          per100: result.product.per100,
+          source: 'off',
+          confidence: null,
+          ciqualCandidates: [],
+          offResults: [],
+          offSearching: false,
+          offError: null,
+        },
+      ];
+      state = 'reviewing';
+    }
     render();
   }
 
@@ -206,6 +254,24 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
 
     if (action === 'scan-start') {
       await startScan();
+      return;
+    }
+    if (action === 'scan-barcode-start') {
+      await startBarcodeScan();
+      return;
+    }
+    if (action === 'scan-reset') {
+      errorMsg = null;
+      // Relaunch whichever flow errored — a bare reset to idle would cost the user
+      // an extra tap to pick the mode again for what's usually a network hiccup.
+      if (lastMode === 'barcode') {
+        await startBarcodeScan();
+      } else if (lastMode === 'photo') {
+        await startScan();
+      } else {
+        state = 'idle';
+        render();
+      }
       return;
     }
     if (action === 'scan-cancel') {

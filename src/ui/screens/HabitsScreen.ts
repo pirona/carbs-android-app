@@ -5,6 +5,7 @@
 import type { HabitsRepo, HabitSortMode } from '../../storage/repos/habitsRepo';
 import type { DayType, Habit, Per100 } from '../../core/types';
 import { searchOFF, type OffProduct } from '../../integrations/openFoodFacts';
+import { lookupOFF, scanBarcode } from '../../integrations/barcodeScan';
 import { parseFoodText } from '../../integrations/n8nFoodParse';
 import { computeFoodMacros, kcalFromMacros } from '../../core/calc/food';
 import { escapeHtml, fmt1 } from '../util';
@@ -86,6 +87,7 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
         <label class="field-label">Rechercher sur OpenFoodFacts</label>
         <input type="text" id="off-query" placeholder="ex: yaourt nature" value="${escapeHtml(f.query)}">
         <button class="btn btn-add" data-action="search">Rechercher</button>
+        <button class="btn" data-action="scan-barcode">🔖 Code-barres</button>
         ${f.loading ? '<div class="empty-hint">Recherche en cours…</div>' : ''}
         ${f.error ? `<div class="empty-hint error-text">${escapeHtml(f.error)}</div>` : ''}
         ${f.results
@@ -227,6 +229,42 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
       day_type_tag: null,
       meal_slot: null,
     };
+    render();
+  }
+
+  async function doBarcodeScan() {
+    if (!form) return;
+    const scan = await scanBarcode();
+    if (scan.status === 'cancelled') return;
+    if (!form) return; // form was closed (Annuler) while the scanner was open
+    if (scan.status === 'error') {
+      form.error = `Scan impossible (${scan.message})`;
+      render();
+      return;
+    }
+    form.loading = true;
+    form.error = null;
+    render();
+    const result = await lookupOFF(scan.code);
+    if (!form) return; // form was closed while the OFF lookup was in flight
+    form.loading = false;
+    if (result.status === 'not-found') {
+      form.error = 'Produit introuvable pour ce code-barres — réessaie ou saisis à la main.';
+    } else if (result.status === 'error') {
+      form.error = result.message;
+    } else {
+      form.step = 'confirm';
+      kcalTouched = false;
+      form.prefill = {
+        label: result.product.name,
+        off_code: result.product.code,
+        source: 'off',
+        portion_g: 100,
+        per100: result.product.per100,
+        day_type_tag: null,
+        meal_slot: null,
+      };
+    }
     render();
   }
 
@@ -390,6 +428,9 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
         break;
       case 'search':
         doSearch();
+        break;
+      case 'scan-barcode':
+        doBarcodeScan();
         break;
       case 'select-product':
         selectProduct(Number(target.dataset.index));

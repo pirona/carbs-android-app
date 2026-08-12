@@ -15,6 +15,7 @@ import { computeFoodMacros, kcalFromMacros } from '../../core/calc/food';
 import { calcWeightGoalProgress } from '../../core/calc/weightGoal';
 import { formatDateKey } from '../../core/calc/date';
 import { searchOFF, type OffProduct } from '../../integrations/openFoodFacts';
+import { lookupOFF, scanBarcode } from '../../integrations/barcodeScan';
 import { parseFoodText } from '../../integrations/n8nFoodParse';
 import { escapeHtml, fmt1 } from '../util';
 
@@ -181,6 +182,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
           <label class="field-label">Rechercher sur OpenFoodFacts</label>
           <input type="text" id="log-off-query" placeholder="ex: yaourt nature" value="${escapeHtml(f.query)}">
           <button class="btn btn-add" data-action="log-search">Rechercher</button>
+          <button class="btn" data-action="log-barcode">🔖 Code-barres</button>
           ${f.loading ? '<div class="empty-hint">Recherche en cours…</div>' : ''}
           ${f.error ? `<div class="empty-hint error-text">${escapeHtml(f.error)}</div>` : ''}
           ${f.results
@@ -481,6 +483,34 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
         logForm.results = [];
       }
       logForm.loading = false;
+      render();
+      return;
+    }
+    if (action === 'log-barcode') {
+      if (!logForm) return;
+      const scan = await scanBarcode();
+      if (scan.status === 'cancelled') return;
+      if (!logForm) return; // form was closed (Annuler) while the scanner was open
+      if (scan.status === 'error') {
+        logForm.error = `Scan impossible (${scan.message})`;
+        render();
+        return;
+      }
+      logForm.loading = true;
+      logForm.error = null;
+      render();
+      const result = await lookupOFF(scan.code);
+      if (!logForm) return; // form was closed while the OFF lookup was in flight
+      logForm.loading = false;
+      if (result.status === 'not-found') {
+        logForm.error = 'Produit introuvable pour ce code-barres — réessaie ou saisis à la main.';
+      } else if (result.status === 'error') {
+        logForm.error = result.message;
+      } else {
+        logForm.step = 'confirm';
+        logKcalTouched = false;
+        logForm.prefill = { label: result.product.name, off_code: result.product.code, source: 'off', portion_g: 100, per100: result.product.per100 };
+      }
       render();
       return;
     }

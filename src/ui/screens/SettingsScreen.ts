@@ -17,6 +17,19 @@ export interface SettingsScreenRepos extends ImportRepos {
 
 const MODE_LABEL: Record<ThemeMode, string> = { auto: 'Auto', light: 'Clair', dark: 'Sombre' };
 
+// Fixed swatches instead of a free hue slider. --accent-h drives every color in style.css —
+// background, surfaces, text, borders, day-type/macro colors — so picking one of these reskins
+// the whole GUI, not just the accent; the swatch itself previews the accent (hsl(hue, 70%, 66%),
+// same formula style.css uses) as the hue's clearest single-color representative.
+const ACCENT_PRESETS: { name: string; hue: number }[] = [
+  { name: 'Abricot', hue: 28 },
+  { name: 'Citron', hue: 50 },
+  { name: 'Menthe', hue: 155 },
+  { name: 'Ciel', hue: 205 },
+  { name: 'Prune', hue: 285 },
+  { name: 'Corail', hue: 355 },
+];
+
 export function renderSettingsScreen(container: HTMLElement, repos: SettingsScreenRepos, storage: StorageAdapter): void {
   let profile: Profile;
   let theme: ThemeSettings = DEFAULT_THEME;
@@ -33,10 +46,19 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
             .map((m) => `<button class="sort-btn ${theme.mode === m ? 'active' : ''}" data-action="theme-mode" data-mode="${m}">${MODE_LABEL[m]}</button>`)
             .join('')}
         </div>
-        <label class="field-label">Couleur d'accent</label>
-        <input type="range" id="s-accent-hue" min="0" max="360" value="${theme.accentHue}" style="width:100%">
-        <div class="empty-hint" style="padding-top:4px">
-          <span class="day-badge" style="background:var(--accent)">Aperçu</span>
+        <label class="field-label">Palette de couleurs</label>
+        <div class="accent-preset-row">
+          ${ACCENT_PRESETS.map(
+            (p) => `
+            <button
+              class="accent-preset ${theme.accentHue === p.hue ? 'active' : ''}"
+              data-action="theme-accent"
+              data-hue="${p.hue}"
+              style="background:hsl(${p.hue} 70% 66%)"
+              aria-label="${p.name}"
+              title="${p.name}"
+            ></button>`,
+          ).join('')}
         </div>
       </div>
 
@@ -94,6 +116,15 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
       return;
     }
 
+    const accentBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-action="theme-accent"]');
+    if (accentBtn) {
+      theme = { ...theme, accentHue: Number(accentBtn.dataset.hue) };
+      applyTheme(theme);
+      await repos.theme.save(theme);
+      render();
+      return;
+    }
+
     const target = (e.target as HTMLElement).closest<HTMLElement>('[data-action="save-profile"]');
     if (!target) return;
     const msgEl = container.querySelector<HTMLDivElement>('#settings-msg')!;
@@ -117,15 +148,6 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
     setTimeout(() => {
       msgEl.textContent = '';
     }, 2000);
-  });
-
-  container.addEventListener('input', async (e) => {
-    const hueInput = e.target as HTMLElement;
-    if (hueInput.id !== 's-accent-hue') return;
-    const accentHue = parseInt((hueInput as HTMLInputElement).value, 10);
-    theme = { ...theme, accentHue };
-    applyTheme(theme);
-    await repos.theme.save(theme);
   });
 
   (async () => {
