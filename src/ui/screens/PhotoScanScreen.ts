@@ -69,7 +69,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
         </div>
         <label class="field-label">Glucides / 100g</label>
         <input type="number" class="row-carb" data-index="${index}" value="${row.per100.carb_g}" step="0.1">
-        <div class="empty-hint" style="padding:4px 0 0">${m.kcal} kcal · P${fmt1(m.protein_g)} L${fmt1(m.fat_g)} G${fmt1(m.carb_g)}</div>
+        <div class="empty-hint row-total-preview" data-index="${index}" style="padding:4px 0 0">${m.kcal} kcal · P${fmt1(m.protein_g)} L${fmt1(m.fat_g)} G${fmt1(m.carb_g)}</div>
 
         ${
           row.ciqualCandidates.length > 1
@@ -123,8 +123,8 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
       }
       <div class="card today-totals">
         <div>
-          <div class="today-totals-kcal">${fmt(totals.kcal)} <span class="empty-hint" style="padding:0">kcal (total)</span></div>
-          <div class="empty-hint" style="padding:0">P${fmt1(totals.protein_g)} · L${fmt1(totals.fat_g)} · G${fmt1(totals.carb_g)}</div>
+          <div class="today-totals-kcal"><span id="scan-total-kcal">${fmt(totals.kcal)}</span> <span class="empty-hint" style="padding:0">kcal (total)</span></div>
+          <div class="empty-hint" id="scan-total-macros" style="padding:0">P${fmt1(totals.protein_g)} · L${fmt1(totals.fat_g)} · G${fmt1(totals.carb_g)}</div>
         </div>
       </div>
       <div class="card">
@@ -262,6 +262,40 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
     if (target.id === 'scan-save-habit') {
       saveAsHabit = (target as HTMLInputElement).checked;
     }
+  });
+
+  const ROW_FIELD_CLASSES = ['row-portion', 'row-kcal', 'row-prot', 'row-fat', 'row-carb'];
+
+  // Recomputes the per-row "X kcal · P.. L.. G.." readout plus the overall total, live on
+  // every keystroke — same live-recompute principle as DayScreen/HabitsScreen's confirm
+  // forms, applied here since a scanned plate's rows carry the exact same portion + /100g
+  // reference fields.
+  function updateScanTotals() {
+    rows.forEach((row, i) => {
+      const el = container.querySelector<HTMLElement>(`.row-total-preview[data-index="${i}"]`);
+      if (!el) return;
+      const m = computeFoodMacros(row.per100, row.portion_g);
+      el.textContent = `${m.kcal} kcal · P${fmt1(m.protein_g)} L${fmt1(m.fat_g)} G${fmt1(m.carb_g)}`;
+    });
+    const totals = rows.reduce(
+      (acc, r) => {
+        const m = computeFoodMacros(r.per100, r.portion_g);
+        return { kcal: acc.kcal + m.kcal, protein_g: acc.protein_g + m.protein_g, fat_g: acc.fat_g + m.fat_g, carb_g: acc.carb_g + m.carb_g };
+      },
+      { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0 },
+    );
+    const kcalEl = container.querySelector<HTMLElement>('#scan-total-kcal');
+    const macroEl = container.querySelector<HTMLElement>('#scan-total-macros');
+    if (kcalEl) kcalEl.textContent = fmt(totals.kcal);
+    if (macroEl) macroEl.textContent = `P${fmt1(totals.protein_g)} · L${fmt1(totals.fat_g)} · G${fmt1(totals.carb_g)}`;
+  }
+
+  container.addEventListener('input', (e) => {
+    const target = e.target as HTMLElement;
+    if (!(target instanceof HTMLInputElement)) return;
+    if (target.dataset.index === undefined || !ROW_FIELD_CLASSES.some((c) => target.classList.contains(c))) return;
+    readRowFieldsFromDom();
+    updateScanTotals();
   });
 
   container.addEventListener('click', async (e) => {

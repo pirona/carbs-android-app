@@ -155,6 +155,10 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
         </div>
         <label class="field-label">Glucides / 100g</label>
         <input type="number" id="f-carb" value="${p.per100.carb_g}" step="0.1">
+        ${(() => {
+          const m = computeFoodMacros(p.per100, p.portion_g);
+          return `<div class="empty-hint" id="f-total-preview" style="padding:4px 0 0">Pour ${p.portion_g} g : ${m.kcal} kcal · P${fmt1(m.protein_g)} L${fmt1(m.fat_g)} G${fmt1(m.carb_g)}</div>`;
+        })()}
 
         <label class="field-label">Type de jour (optionnel)</label>
         <select id="f-daytype">
@@ -391,6 +395,28 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
     render();
   }
 
+  // Recomputes the "Pour X g : ..." readout from the confirm form's current field values —
+  // called on every keystroke so the actual portion total (not the /100g reference fields)
+  // stays truthful without a full render() wiping focus mid-typing.
+  function updateTotalPreview() {
+    const portionInput = container.querySelector<HTMLInputElement>('#f-portion');
+    const kcalInput = container.querySelector<HTMLInputElement>('#f-kcal');
+    const protInput = container.querySelector<HTMLInputElement>('#f-prot');
+    const fatInput = container.querySelector<HTMLInputElement>('#f-fat');
+    const carbInput = container.querySelector<HTMLInputElement>('#f-carb');
+    const preview = container.querySelector<HTMLElement>('#f-total-preview');
+    if (!portionInput || !kcalInput || !protInput || !fatInput || !carbInput || !preview) return;
+    const portion = parseFloat(portionInput.value) || 0;
+    const per100: Per100 = {
+      kcal: parseFloat(kcalInput.value) || 0,
+      protein_g: parseFloat(protInput.value) || 0,
+      fat_g: parseFloat(fatInput.value) || 0,
+      carb_g: parseFloat(carbInput.value) || 0,
+    };
+    const m = computeFoodMacros(per100, portion);
+    preview.textContent = `Pour ${portion} g : ${m.kcal} kcal · P${fmt1(m.protein_g)} L${fmt1(m.fat_g)} G${fmt1(m.carb_g)}`;
+  }
+
   // 'input' fires on every keystroke (unlike 'change', which only fires on blur) — needed
   // for the kcal-from-macros recompute to actually feel live while typing.
   container.addEventListener('input', (e) => {
@@ -398,14 +424,16 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
     if (!form || form.step !== 'confirm') return;
     if (target.id === 'f-kcal') {
       kcalTouched = true;
-      return;
+    } else if (!kcalTouched && ['f-prot', 'f-fat', 'f-carb'].includes(target.id)) {
+      const prot = parseFloat(container.querySelector<HTMLInputElement>('#f-prot')!.value) || 0;
+      const fat = parseFloat(container.querySelector<HTMLInputElement>('#f-fat')!.value) || 0;
+      const carb = parseFloat(container.querySelector<HTMLInputElement>('#f-carb')!.value) || 0;
+      const kcalInput = container.querySelector<HTMLInputElement>('#f-kcal');
+      if (kcalInput) kcalInput.value = String(kcalFromMacros(prot, fat, carb));
     }
-    if (kcalTouched || !['f-prot', 'f-fat', 'f-carb'].includes(target.id)) return;
-    const prot = parseFloat(container.querySelector<HTMLInputElement>('#f-prot')!.value) || 0;
-    const fat = parseFloat(container.querySelector<HTMLInputElement>('#f-fat')!.value) || 0;
-    const carb = parseFloat(container.querySelector<HTMLInputElement>('#f-carb')!.value) || 0;
-    const kcalInput = container.querySelector<HTMLInputElement>('#f-kcal');
-    if (kcalInput) kcalInput.value = String(kcalFromMacros(prot, fat, carb));
+    if (['f-portion', 'f-kcal', 'f-prot', 'f-fat', 'f-carb'].includes(target.id)) {
+      updateTotalPreview();
+    }
   });
 
   container.addEventListener('click', (e) => {

@@ -247,6 +247,10 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
         </div>
         <label class="field-label">Glucides / 100g</label>
         <input type="number" id="log-f-carb" value="${p.per100.carb_g}" step="0.1">
+        ${(() => {
+          const m = computeFoodMacros(p.per100, p.portion_g);
+          return `<div class="empty-hint" id="log-f-total-preview" style="padding:4px 0 0">Pour ${p.portion_g} g : ${m.kcal} kcal · P${fmt1(m.protein_g)} L${fmt1(m.fat_g)} G${fmt1(m.carb_g)}</div>`;
+        })()}
         <label class="checkbox-label">
           <input type="checkbox" id="log-f-save-habit" ${f.saveAsHabit ? 'checked' : ''}>
           💾 Sauver aussi en habitude
@@ -360,6 +364,28 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       ${weightGoalCard()}
       ${todayCard()}
     `;
+  }
+
+  // Recomputes the "Pour X g : ..." readout from the confirm form's current field values —
+  // called on every keystroke so the actual portion total (not the /100g reference fields)
+  // stays truthful without a full render() wiping focus mid-typing.
+  function updateLogTotalPreview() {
+    const portionInput = container.querySelector<HTMLInputElement>('#log-f-portion');
+    const kcalInput = container.querySelector<HTMLInputElement>('#log-f-kcal');
+    const protInput = container.querySelector<HTMLInputElement>('#log-f-prot');
+    const fatInput = container.querySelector<HTMLInputElement>('#log-f-fat');
+    const carbInput = container.querySelector<HTMLInputElement>('#log-f-carb');
+    const preview = container.querySelector<HTMLElement>('#log-f-total-preview');
+    if (!portionInput || !kcalInput || !protInput || !fatInput || !carbInput || !preview) return;
+    const portion = parseFloat(portionInput.value) || 0;
+    const per100 = {
+      kcal: parseFloat(kcalInput.value) || 0,
+      protein_g: parseFloat(protInput.value) || 0,
+      fat_g: parseFloat(fatInput.value) || 0,
+      carb_g: parseFloat(carbInput.value) || 0,
+    };
+    const m = computeFoodMacros(per100, portion);
+    preview.textContent = `Pour ${portion} g : ${m.kcal} kcal · P${fmt1(m.protein_g)} L${fmt1(m.fat_g)} G${fmt1(m.carb_g)}`;
   }
 
   async function withRefresh(action: () => Promise<void> | void) {
@@ -543,6 +569,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       if (input && factor) {
         const current = parseFloat(input.value) || 0;
         input.value = String(Math.round(current * factor));
+        updateLogTotalPreview();
       }
       return;
     }
@@ -656,14 +683,15 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
     const target = e.target as HTMLInputElement;
     if (target.id === 'log-f-kcal') {
       logKcalTouched = true;
-      return;
-    }
-    if (!logKcalTouched && logForm?.step === 'confirm' && ['log-f-prot', 'log-f-fat', 'log-f-carb'].includes(target.id)) {
+    } else if (!logKcalTouched && logForm?.step === 'confirm' && ['log-f-prot', 'log-f-fat', 'log-f-carb'].includes(target.id)) {
       const prot = parseFloat(container.querySelector<HTMLInputElement>('#log-f-prot')!.value) || 0;
       const fat = parseFloat(container.querySelector<HTMLInputElement>('#log-f-fat')!.value) || 0;
       const carb = parseFloat(container.querySelector<HTMLInputElement>('#log-f-carb')!.value) || 0;
       const kcalInput = container.querySelector<HTMLInputElement>('#log-f-kcal');
       if (kcalInput) kcalInput.value = String(kcalFromMacros(prot, fat, carb));
+    }
+    if (logForm?.step === 'confirm' && ['log-f-portion', 'log-f-kcal', 'log-f-prot', 'log-f-fat', 'log-f-carb'].includes(target.id)) {
+      updateLogTotalPreview();
     }
   });
 
