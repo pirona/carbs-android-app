@@ -44,8 +44,6 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
 
   function render() {
     container.innerHTML = `
-      <h1 style="margin-bottom:10px">Réglages</h1>
-
       <div class="card">
         <h2>🎨 Thème</h2>
         <label class="field-label">Apparence</label>

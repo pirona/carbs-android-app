@@ -20,7 +20,7 @@ const root = join(__dirname, '..');
 const mascotPath = join(root, '.mascot-preview', 'taco-chick', 'filled', 'poussin-taco-master.png');
 const resDir = join(root, 'resources');
 
-const CREAM = { r: 0xff, g: 0xf6, b: 0xea, alpha: 1 };
+const CREAM = { r: 0xff, g: 0xfd, b: 0xf9, alpha: 1 };
 
 async function mascotBuffer(boxSize) {
   // Fit the (portrait) mascot inside a boxSize×boxSize box, preserving aspect ratio — matches

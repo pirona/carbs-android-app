@@ -181,7 +181,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
     } else {
       body = reviewingHtml();
     }
-    container.innerHTML = `<h1 style="margin-bottom:10px">📷 Scan photo</h1>${body}`;
+    container.innerHTML = body;
   }
 
   async function startScan() {

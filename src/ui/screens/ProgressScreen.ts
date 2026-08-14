@@ -166,7 +166,6 @@ export function renderProgressScreen(container: HTMLElement, repos: ProgressScre
 
   async function render() {
     container.innerHTML = `
-      <h1 style="margin-bottom:10px">📈 Progrès</h1>
       ${weightGoalCard()}
       ${plaisirCard()}
       ${await weekSummaryHtml()}

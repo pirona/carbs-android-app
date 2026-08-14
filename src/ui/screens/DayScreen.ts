@@ -22,6 +22,7 @@ import {
   interpretFoodTextWithAI,
 } from '../forms/foodEntryForm';
 import { escapeHtml, fmt1, attachLongPress } from '../util';
+import { iconAdd, iconRestaurant } from '../icons';
 
 export interface DayScreenRepos extends DayTrackingRepos {
   habits: HabitsRepo;
@@ -217,9 +218,13 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
 
     return `
       <div class="card">
-        <h2>🍽️ Aujourd'hui</h2>
+        <h2 style="display:flex;align-items:center;gap:8px"><span style="color:var(--accent-text);display:inline-flex">${iconRestaurant()}</span> Aujourd'hui</h2>
         ${habitChips()}
-        ${logForm ? logFormHtml() : '<button class="btn btn-add" data-action="log-open">+ Logger un aliment</button>'}
+        ${
+          logForm
+            ? logFormHtml()
+            : `<button class="btn-cta" style="display:flex;align-items:center;justify-content:center;gap:6px" data-action="log-open">${iconAdd()} Logger un aliment</button>`
+        }
         <div class="form-block">
           <div class="empty-hint" style="padding-bottom:4px">Journal du jour</div>
           ${entriesHtml}
@@ -248,7 +253,6 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
 
     container.innerHTML = `
       <div class="day-header">
-        <h1>Aujourd'hui</h1>
         <span class="day-badge" style="background:${DAYTYPE_COLOR[dt]}">${DAYTYPE_LABEL[dt]}</span>
       </div>
 
@@ -260,14 +264,15 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
         </div>
         <label class="field-label" style="margin-top:8px">Kcal sport (séance du jour)</label>
         <div class="inline-input-row">
-          <input type="number" id="sport-input" placeholder="kcal séance…">
+          <input type="number" id="sport-input" placeholder="0">
           <button class="btn" data-action="confirm-sport">✓</button>
           ${snap.current.sport_kcal !== null ? '<button class="btn btn-cancel" data-action="clear-sport">effacer</button>' : ''}
         </div>
         ${healthConnectStatusHtml()}
       </div>
 
-      <div class="card">
+      <div class="card" style="position:relative">
+        <img src="/logo-taco-chick.png" alt="" style="position:absolute;top:16px;right:16px;width:52px;height:52px;object-fit:contain">
         ${
           dt !== 'plaisir'
             ? `

@@ -21,36 +21,56 @@
 :root {
   /* ── Accent hue — single user-configurable value, everything below derives from it ── */
   --accent-h: 28;
-  --accent-s: 70%;
-  --accent-l: 66%;
+  --accent-s: 74%;
+  --accent-l: 53%;
 
-  /* ── Light mode (default) — pale/near-white tints of --accent-h ─────────────────── */
-  --bg: hsl(var(--accent-h) 55% 98%);
-  --surface: hsl(var(--accent-h) 65% 93%);
+  /* ── Light mode (default) — M3 surface tiers, pale/near-white tints of --accent-h ──── */
+  --bg: hsl(var(--accent-h) 100% 97.5%);
+  --surface: hsl(var(--accent-h) 64% 91%);
   --surface2: hsl(var(--accent-h) 50% 87%);
+  /* Lighter than --surface (M3 "outlined text field" — the field recedes, not a filled box). */
+  --surface-container-lowest: hsl(var(--accent-h) 100% 98.5%);
+  /* Between --bg and --surface — .card-quiet's de-emphasized tier. */
+  --surface-container-low: hsl(var(--accent-h) 60% 95%);
   --text: hsl(var(--accent-h) 35% 16%);
   --text-muted: hsl(var(--accent-h) 18% 46%);
-  --border: hsl(var(--accent-h) 38% 80%);
+  --border: hsl(var(--accent-h) 41% 77%);
+  /* Subtler than --border — internal list dividers (row separators), not card/field contours. */
+  --outline-variant: hsl(var(--accent-h) 51% 84%);
+  --disabled: hsl(var(--accent-h) 23% 70%);
   --bad: #e2585f;
 
   --accent: hsl(var(--accent-h) var(--accent-s) var(--accent-l));
   --accent-glow: hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 45%);
   --accent-wash: hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 15%);
-  /* Pastel accents this light need dark text for contrast, not white — same ink as --text. */
-  --on-accent: hsl(var(--accent-h) 35% 16%);
+  /* M3 primary/on-primary pairing — accent is now richer/darker (see --accent-l above), so its
+     text wants to be light/cream, not the dark ink used when accent was a pale pastel. */
+  --on-accent: hsl(var(--accent-h) 100% 97%);
+  /* Deeper than --accent — kcal hero number / totals, needs to read as "ink", not "button fill". */
+  --accent-text: hsl(var(--accent-h) 79% 39%);
+  --secondary-container: hsl(var(--accent-h) 90% 84%);
+  --secondary-container-hover: hsl(var(--accent-h) 87% 79%);
+  --on-secondary-container: hsl(var(--accent-h) 69% 21%);
 
   /* Day-type + macro families — rotations/shades around --accent, not separate hues. */
   --high: var(--accent);
   --medium: hsl(calc(var(--accent-h) + 35) var(--accent-s) var(--accent-l));
   --low: hsl(calc(var(--accent-h) - 35) calc(var(--accent-s) - 15%) calc(var(--accent-l) - 3%));
   --plaisir: hsl(calc(var(--accent-h) + 180) var(--accent-s) calc(var(--accent-l) + 8%));
-  --protein: hsl(calc(var(--accent-h) + 20) var(--accent-s) var(--accent-l));
-  --fat: hsl(calc(var(--accent-h) - 55) calc(var(--accent-s) - 10%) calc(var(--accent-l) + 8%));
-  --carb: var(--accent);
+  --protein: var(--accent);
+  --fat: hsl(calc(var(--accent-h) + 15) 63% 53%);
+  --carb: hsl(calc(var(--accent-h) - 15) 47% 56%);
 
-  --radius: 14px;
-  --radius-sm: 8px;
-  --radius-pill: 999px;
+  /* M3 shape scale. */
+  --shape-xs: 4px;
+  --shape-sm: 8px;
+  --shape-md: 12px;
+  --shape-lg: 16px;
+  --shape-xl: 28px;
+  --shape-full: 999px;
+  --radius: var(--shape-md);
+  --radius-sm: var(--shape-xs);
+  --radius-pill: var(--shape-full);
   --font-display: 'Baloo 2', -apple-system, sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', Consolas, monospace;
 }
@@ -62,18 +82,26 @@
     --bg: hsl(var(--accent-h) 30% 9%);
     --surface: hsl(var(--accent-h) 26% 13%);
     --surface2: hsl(var(--accent-h) 24% 18%);
+    --surface-container-lowest: hsl(var(--accent-h) 26% 11%);
+    --surface-container-low: hsl(var(--accent-h) 27% 11%);
     --text: hsl(var(--accent-h) 45% 93%);
     --text-muted: hsl(var(--accent-h) 18% 68%);
     --border: hsl(var(--accent-h) 22% 25%);
+    --outline-variant: hsl(var(--accent-h) 20% 20%);
+    --disabled: hsl(var(--accent-h) 15% 40%);
   }
 }
 :root[data-theme='dark'] {
   --bg: hsl(var(--accent-h) 30% 9%);
   --surface: hsl(var(--accent-h) 26% 13%);
   --surface2: hsl(var(--accent-h) 24% 18%);
+  --surface-container-lowest: hsl(var(--accent-h) 26% 11%);
+  --surface-container-low: hsl(var(--accent-h) 27% 11%);
   --text: hsl(var(--accent-h) 45% 93%);
   --text-muted: hsl(var(--accent-h) 18% 68%);
   --border: hsl(var(--accent-h) 22% 25%);
+  --outline-variant: hsl(var(--accent-h) 20% 20%);
+  --disabled: hsl(var(--accent-h) 15% 40%);
 }
 
 * {
@@ -146,26 +174,31 @@ p.hint {
   margin-bottom: 14px;
 }
 
+/* M3 elevation-by-tint: no shadow, no border — the fill color alone separates a card from the
+   page (var(--bg)) and from nested content (var(--surface2)). */
 .card {
   background: var(--surface);
   border-radius: var(--radius);
   padding: 16px;
   margin-bottom: 14px;
-  border: 1px solid var(--border);
-  transition: border-color 0.2s ease;
 }
 
 /* Visually recedes behind a screen's own hero card (e.g. Progress tab's weight-goal card) —
-   same box model as .card, lighter border, no surface fill. */
+   a step below --surface toward the page background, not a border trick. */
 .card-quiet {
-  background: transparent;
-  border-color: var(--bg);
+  background: var(--surface-container-low);
+}
+
+/* One step above --surface — gives a single nested/expanded card visual priority over its
+   siblings (e.g. PhotoScanScreen's expanded review row among collapsed ones). */
+.card-elevated {
+  background: var(--surface2);
 }
 
 textarea {
   width: 100%;
   height: 200px;
-  background: var(--bg);
+  background: var(--surface-container-lowest);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -181,7 +214,7 @@ textarea {
 .btn {
   padding: 8px 10px;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--shape-full);
   font-size: 14px;
   font-weight: 700;
   background: var(--surface2);
@@ -198,32 +231,42 @@ textarea {
   opacity: 0.4;
 }
 
+/* M3 Filled Tonal — secondary-emphasis CTA, distinct from .btn-cta's Filled/primary emphasis. */
 .btn-add {
-  background: var(--medium);
-  color: var(--on-accent);
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+  border: none;
+  border-radius: var(--shape-full);
   width: 100%;
   padding: 10px 16px;
-  font-size: 15px;
+  font-size: 16px;
+  font-weight: 600;
   margin-top: 10px;
 }
 
+/* M3 Filled — primary emphasis. */
 .btn-cta {
   background: var(--high);
   color: var(--on-accent);
+  border: none;
+  border-radius: var(--shape-full);
   width: 100%;
   padding: 10px 16px;
-  font-size: 15px;
+  font-size: 16px;
+  font-weight: 600;
   margin-top: 10px;
-  box-shadow: 0 0 0 1px var(--accent-glow);
 }
 
+/* M3 Outlined. */
 .btn-secondary {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
+  border-radius: var(--shape-full);
   width: 100%;
   padding: 10px 16px;
-  font-size: 15px;
+  font-size: 16px;
+  font-weight: 600;
   margin-top: 10px;
 }
 
@@ -254,17 +297,17 @@ textarea {
 .form-block {
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--outline-variant);
 }
 
-/* ── Forms ─────────────────────────────────────────────────────────────── */
+/* ── Forms — M3 outlined text field: pale fill + visible outline, not a filled recessed box. ── */
 input[type='text'],
 input[type='number'],
 select {
   width: 100%;
-  background: var(--surface2);
+  background: var(--surface-container-lowest);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--shape-xs);
   color: var(--text);
   padding: 8px 10px;
   font-size: 15px;
@@ -287,7 +330,8 @@ select:focus {
 }
 
 label.field-label {
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-muted);
   display: block;
   margin-bottom: 3px;
@@ -315,7 +359,7 @@ label.field-label {
 
 .sort-btn {
   padding: 4px 8px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--shape-full);
   border: 1px solid var(--border);
   background: var(--surface2);
   color: var(--text-muted);
@@ -354,7 +398,7 @@ label.field-label {
   justify-content: space-between;
   align-items: center;
   padding: 8px 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--outline-variant);
   gap: 8px;
 }
 
@@ -400,7 +444,7 @@ label.field-label {
 
 .search-result {
   padding: 8px;
-  border-radius: 8px;
+  border-radius: var(--shape-sm);
   background: var(--surface2);
   margin-bottom: 6px;
 }
@@ -463,7 +507,7 @@ label.field-label {
   display: flex;
   justify-content: space-between;
   padding: 3px 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--outline-variant);
 }
 
 .counts div:last-child {
@@ -491,42 +535,137 @@ label.field-label {
   color: var(--bad);
 }
 
-/* ── Navigation shell ──────────────────────────────────────────────────── */
-#tabs {
-  display: flex;
-  gap: 6px;
-  padding: 10px 10px 0;
-  overflow-x: auto;
+/* ── Navigation shell — M3 top app bar + bottom navigation bar ──────────── */
+/* Split in two: #topbar (outer) absorbs the status-bar safe area as padding so it never
+   shrinks the bar's own content, #topbar-inner (fixed 64px) is the actual bar row — avoids
+   fighting box-sizing:border-box (global reset) to make padding-top ADD to height instead of
+   eating into it. viewport-fit=cover (index.html) is what makes the WebView draw edge-to-edge
+   under the status bar in the first place, hence needing this compensation at all. */
+#topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding-top: env(safe-area-inset-top);
+  background: var(--surface);
 }
 
-#tabs button {
-  flex: 1 0 auto;
-  padding: 10px 12px;
-  border: none;
-  border-radius: var(--radius-sm);
+#topbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 64px;
+  padding: 0 14px;
+}
+
+#topbar-logo {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+#topbar-title {
+  flex: 1;
+  min-width: 0;
   font-family: var(--font-display);
-  font-size: 12px;
-  font-weight: 700;
-  background: var(--accent);
-  color: var(--on-accent);
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#topbar-settings {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: var(--shape-full);
+  background: none;
+  color: var(--text);
+  padding: 0;
   transition: background 0.2s ease, color 0.2s ease;
 }
 
-#tabs button.inactive {
-  background: var(--surface);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
+#topbar-settings.active {
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
 }
 
 #screen {
-  padding: 16px;
+  padding: 14px;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
+
+#tabs {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: space-around;
+  height: 80px;
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--surface);
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 68px;
+  /* Explicit pixel height, not a percentage or align-self:stretch — both measured as no-ops on
+     this WebView for a <button> (a known form-control quirk: buttons often ignore percentage
+     height/stretch sizing). Without it the button collapsed to ~32px content height regardless
+     of #tabs' own height, spilling the icon above the button's box. Keep in sync with #tabs. */
+  height: 80px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  padding: 12px 0 16px;
+}
+
+.nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 32px;
+  border-radius: var(--shape-full);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.nav-item.active {
+  color: var(--text);
+}
+
+.nav-item.active .nav-icon {
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+}
+
+.nav-label {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.nav-item.active .nav-label {
+  font-weight: 600;
 }
 
 /* ── Day screen ────────────────────────────────────────────────────────── */
+/* The screen title now lives in the shared top app bar (#topbar-title) — this just holds the
+   day-type badge, on its own since there's no sibling title to space-between with anymore. */
 .day-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: 10px;
 }
 
@@ -549,21 +688,41 @@ label.field-label {
   margin-bottom: 0;
 }
 
+#weight-input,
+#sport-input {
+  font-size: 20px;
+  font-weight: 600;
+  border-radius: 10px;
+}
+
+/* The ✓ confirm button next to weight/sport fields — round M3 filled-tonal icon button. */
 .inline-input-row .btn {
   margin: 0;
   flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+  border-radius: var(--shape-full);
 }
 
 .kcal-total {
   font-family: var(--font-display);
-  font-size: 36px;
-  font-weight: 800;
+  font-size: 48px;
+  font-weight: 700;
+  letter-spacing: -1.5px;
   text-align: center;
 }
 
+/* No color of its own — inherits the day-type color set inline on .kcal-total, so the number
+   and its unit read as one consistent hero readout. */
 .kcal-unit {
-  font-size: 15px;
-  color: var(--text-muted);
+  font-size: 20px;
+  font-weight: 600;
 }
 
 .macros-grid {
@@ -590,16 +749,16 @@ label.field-label {
 }
 
 .macro-bar-wrap {
-  height: 3px;
-  background: var(--border);
-  border-radius: 2px;
+  height: 8px;
+  background: var(--outline-variant);
+  border-radius: 4px;
   margin-top: 4px;
   overflow: hidden;
 }
 
 .macro-bar {
   height: 100%;
-  border-radius: 2px;
+  border-radius: 4px;
   transition: width 0.4s ease-out;
 }
 
@@ -665,14 +824,15 @@ label.field-label {
   margin-bottom: 10px;
 }
 
+/* M3-outlined chip — contour only, no fill. */
 .chip {
-  background: var(--surface2);
+  background: transparent;
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: var(--radius-pill);
-  padding: 6px 12px;
+  padding: 7px 14px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   width: auto;
   margin-top: 0;
   transition: border-color 0.15s ease;
@@ -702,7 +862,7 @@ label.field-label {
   justify-content: space-between;
   gap: 6px;
   padding: 5px 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--outline-variant);
 }
 
 .log-entry-info {
@@ -711,15 +871,15 @@ label.field-label {
 }
 
 .log-entry-label {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .log-entry-sub {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
@@ -746,7 +906,7 @@ input.log-entry-portion {
 .today-totals {
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--outline-variant);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -755,6 +915,7 @@ input.log-entry-portion {
 .today-totals-kcal {
   font-size: 20px;
   font-weight: 700;
+  color: var(--accent-text);
 }
 
 /* ── Week screen ───────────────────────────────────────────────────────── */
@@ -770,12 +931,12 @@ input.log-entry-portion {
   color: var(--text-muted);
   font-weight: 600;
   padding: 4px 6px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--outline-variant);
 }
 
 .week-table td {
   padding: 6px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--outline-variant);
 }
 
 .week-table tr:last-child td {

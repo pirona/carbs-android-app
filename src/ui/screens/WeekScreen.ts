@@ -112,10 +112,7 @@ export function renderWeekScreen(container: HTMLElement, repos: WeekScreenRepos)
   }
 
   async function render() {
-    container.innerHTML = `
-      <h1 style="margin-bottom:10px">Semaine</h1>
-      ${await semainierHtml()}
-    `;
+    container.innerHTML = await semainierHtml();
   }
 
   container.addEventListener('click', async (e) => {

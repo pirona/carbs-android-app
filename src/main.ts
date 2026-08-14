@@ -20,6 +20,7 @@ import { NextcloudRepo } from './storage/repos/nextcloudRepo';
 import { backupToNextcloud, getNextcloudPassword } from './integrations/nextcloudWebdav';
 import { buildExportBlob } from './migration/exportDump';
 import { applyTheme } from './ui/theme';
+import { iconHome, iconTrendingUp, iconPhotoCamera, iconCalendarMonth, iconRestaurantMenu, iconSettings } from './ui/icons';
 
 const storage = new PreferencesStorageAdapter();
 const healthConnect = new CapgoHealthConnectAdapter();
@@ -58,32 +59,61 @@ const weekRepos: WeekScreenRepos = { dayHistory, plaisir, sport, profile };
 const settingsRepos: SettingsScreenRepos = { dayHistory, carbHistory, plaisir, sport, habits, foodLog, profile, theme, nextcloud };
 const photoScanRepos: PhotoScanScreenRepos = { habits, foodLog };
 
-// "Scan" sits right after "Jour" — photo entry is the primary adoption driver for this
-// app (see project memory), not a secondary feature bolted on after the core screens.
-// "Progrès" sits right after "Jour" too — the read-only/low-frequency content pulled off
-// Day and Week (weight-goal, plaisir declaration, weekly stats, weight chart) lives there.
 type TabId = 'day' | 'progress' | 'scan' | 'week' | 'habits' | 'settings';
-const TABS: { id: TabId; label: string; render: (el: HTMLElement) => void }[] = [
-  { id: 'day', label: 'Jour', render: (el) => renderDayScreen(el, dayRepos, healthConnect) },
-  { id: 'progress', label: '📈 Progrès', render: (el) => renderProgressScreen(el, progressRepos) },
-  { id: 'scan', label: '📷 Scan', render: (el) => renderPhotoScanScreen(el, photoScanRepos) },
-  { id: 'week', label: 'Semaine', render: (el) => renderWeekScreen(el, weekRepos) },
-  { id: 'habits', label: 'Habitudes', render: (el) => renderHabitsScreen(el, { habits }) },
-  { id: 'settings', label: 'Réglages', render: (el) => renderSettingsScreen(el, settingsRepos, storage) },
+interface TabDef {
+  id: TabId;
+  label: string;
+  render: (el: HTMLElement) => void;
+}
+
+// The 5 destinations that fit an M3 bottom navigation bar (max recommended is 5) — "Scan"
+// sits right after "Jour" since photo entry is the primary adoption driver for this app (see
+// project memory), not a secondary feature bolted on after the core screens. Réglages doesn't
+// belong here: it's not a frequent daily destination, so it lives as a top-app-bar icon instead
+// (see #topbar-settings below), present on every screen regardless of which tab is active.
+const PRIMARY_TABS: (TabDef & { icon: () => string })[] = [
+  { id: 'day', icon: iconHome, label: 'Jour', render: (el) => renderDayScreen(el, dayRepos, healthConnect) },
+  { id: 'progress', icon: iconTrendingUp, label: 'Progrès', render: (el) => renderProgressScreen(el, progressRepos) },
+  { id: 'scan', icon: iconPhotoCamera, label: 'Scan', render: (el) => renderPhotoScanScreen(el, photoScanRepos) },
+  { id: 'week', icon: iconCalendarMonth, label: 'Semaine', render: (el) => renderWeekScreen(el, weekRepos) },
+  { id: 'habits', icon: iconRestaurantMenu, label: 'Habitudes', render: (el) => renderHabitsScreen(el, { habits }) },
 ];
+
+const SETTINGS_TAB: TabDef = { id: 'settings', label: 'Réglages', render: (el) => renderSettingsScreen(el, settingsRepos, storage) };
+
+const ALL_TABS: TabDef[] = [...PRIMARY_TABS, SETTINGS_TAB];
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
-  <div id="tabs">${TABS.map((t) => `<button data-tab="${t.id}">${t.label}</button>`).join('')}</div>
+  <header id="topbar">
+    <div id="topbar-inner">
+      <img id="topbar-logo" src="/logo-taco-chick.png" alt="">
+      <h1 id="topbar-title"></h1>
+      <button id="topbar-settings" data-tab="settings" aria-label="Réglages">${iconSettings()}</button>
+    </div>
+  </header>
   <div id="screen"></div>
+  <nav id="tabs">
+    ${PRIMARY_TABS.map(
+      (t) => `
+      <button class="nav-item" data-tab="${t.id}">
+        <span class="nav-icon">${t.icon()}</span>
+        <span class="nav-label">${t.label}</span>
+      </button>`,
+    ).join('')}
+  </nav>
 `;
 
 let screen = app.querySelector<HTMLDivElement>('#screen')!;
-const tabButtons = app.querySelectorAll<HTMLButtonElement>('[data-tab]');
+const topbarTitle = app.querySelector<HTMLHeadingElement>('#topbar-title')!;
+const topbarSettings = app.querySelector<HTMLButtonElement>('#topbar-settings')!;
+const navItems = app.querySelectorAll<HTMLButtonElement>('#tabs [data-tab]');
 
 function showTab(id: TabId) {
-  const tab = TABS.find((t) => t.id === id)!;
-  tabButtons.forEach((btn) => btn.classList.toggle('inactive', btn.dataset.tab !== id));
+  const tab = ALL_TABS.find((t) => t.id === id)!;
+  navItems.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === id));
+  topbarSettings.classList.toggle('active', id === 'settings');
+  topbarTitle.textContent = tab.label;
   // Each screen module attaches its own click/change listeners directly on the container
   // it's given (see DayScreen etc.) — reusing the same node across renders would stack a
   // new listener on top of every previous one, firing actions multiple times per tap.
@@ -94,6 +124,7 @@ function showTab(id: TabId) {
   tab.render(screen);
 }
 
-tabButtons.forEach((btn) => btn.addEventListener('click', () => showTab(btn.dataset.tab as TabId)));
+navItems.forEach((btn) => btn.addEventListener('click', () => showTab(btn.dataset.tab as TabId)));
+topbarSettings.addEventListener('click', () => showTab('settings'));
 
 showTab('day');
