@@ -3,8 +3,15 @@
 // scanner UI (GmsBarcodeScanning) — no camera permission to request on the app side,
 // Play Services owns that prompt itself.
 import type { PluginListenerHandle } from '@capacitor/core';
-import { BarcodeScanner, GoogleBarcodeScannerModuleInstallState } from '@capacitor-mlkit/barcode-scanning';
+import { BarcodeScanner, BarcodeFormat, GoogleBarcodeScannerModuleInstallState } from '@capacitor-mlkit/barcode-scanning';
 import { getOFFByBarcode, type OffProduct } from './openFoodFacts';
+
+// Grocery products only ever carry EAN-13/EAN-8/UPC-A/UPC-E — restricting formats is the one
+// tuning knob ML Kit's ready-to-use scanner UI exposes (per its own docs: "Improve the speed
+// of the barcode scanner by configuring the barcode formats to scan for"), and narrowing the
+// hypothesis space this way also makes it settle on a confident read faster instead of racing
+// to lock onto the first blurry/partial frame across every supported format (Aztec, PDF417...).
+const FOOD_BARCODE_FORMATS = [BarcodeFormat.Ean13, BarcodeFormat.Ean8, BarcodeFormat.UpcA, BarcodeFormat.UpcE];
 
 export type BarcodeScanResult =
   | { status: 'ok'; code: string }
@@ -45,7 +52,7 @@ async function ensureModuleInstalled(): Promise<void> {
 export async function scanBarcode(): Promise<BarcodeScanResult> {
   try {
     await ensureModuleInstalled();
-    const { barcodes } = await BarcodeScanner.scan();
+    const { barcodes } = await BarcodeScanner.scan({ formats: FOOD_BARCODE_FORMATS });
     const code = barcodes[0]?.rawValue;
     if (!code) return { status: 'cancelled' };
     return { status: 'ok', code };

@@ -14,7 +14,8 @@ import { analyzePlatePhoto } from '../../integrations/n8nFoodVision';
 import { lookupOFF, scanBarcode } from '../../integrations/barcodeScan';
 import { searchOFF } from '../../integrations/openFoodFacts';
 import { componentToRow, habitToRows, tryRecognizeHabit, type RowSource, type ScanRow } from '../../app/photoScanMatch';
-import { computeFoodMacros } from '../../core/calc/food';
+import { computeFoodMacros, kcalFromMacros } from '../../core/calc/food';
+import { renderPer100FieldsHtml } from '../forms/foodEntryForm';
 import { escapeHtml, fmt1 } from '../util';
 
 export interface PhotoScanScreenRepos {
@@ -48,28 +49,52 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
   // Which flow to relaunch when "Réessayer" is tapped from the error state — the two
   // scan modes need different retry actions, so a single hardcoded button can't know.
   let lastMode: 'photo' | 'barcode' | null = null;
+  // Collapsed by default on entering 'reviewing' (a multi-item plate would otherwise bury
+  // "Confirmer & logger" under N fully-expanded edit cards) — except when there's exactly
+  // one row (barcode scans always produce one), where the extra tap would be pure friction.
+  let expandedRows = new Set<number>();
+  // Per-row touched-kcal guard, same purpose as Day/Habits' single-form version (see
+  // foodEntryForm.ts) — indices, not row identities, so remove-row must reindex both sets.
+  let rowKcalTouched = new Set<number>();
+
+  function reindexAfterRemoval(removedIndex: number) {
+    const shift = (set: Set<number>) => {
+      const next = new Set<number>();
+      for (const i of set) {
+        if (i < removedIndex) next.add(i);
+        else if (i > removedIndex) next.add(i - 1);
+      }
+      return next;
+    };
+    expandedRows = shift(expandedRows);
+    rowKcalTouched = shift(rowKcalTouched);
+  }
 
   function rowCard(row: ScanRow, index: number): string {
     const m = computeFoodMacros(row.per100, row.portion_g);
+    if (!expandedRows.has(index)) {
+      return `
+        <div class="habit-row" data-action="toggle-row" data-index="${index}">
+          <div class="habit-info">
+            <div class="habit-label">${escapeHtml(row.label)}</div>
+            <div class="habit-sub">${m.kcal} kcal · ${SOURCE_LABEL[row.source]}</div>
+          </div>
+          <div class="habit-actions">
+            <button class="btn btn-icon" data-action="remove-row" data-index="${index}">✕</button>
+            <span class="row-chevron">▸</span>
+          </div>
+        </div>`;
+    }
     return `
       <div class="card scan-row">
-        <div class="list-header">
+        <div class="list-header" data-action="toggle-row" data-index="${index}" style="cursor:pointer">
           <span class="empty-hint" style="padding:0">${SOURCE_LABEL[row.source]}${row.confidence ? ` · confiance ${escapeHtml(row.confidence)}` : ''}</span>
-          <button class="icon-btn" data-action="remove-row" data-index="${index}">✕</button>
+          <span style="display:flex;align-items:center;gap:6px">
+            <button class="icon-btn" data-action="remove-row" data-index="${index}">✕</button>
+            <span class="row-chevron expanded">▸</span>
+          </span>
         </div>
-        <label class="field-label">Nom</label>
-        <input type="text" class="row-label" data-index="${index}" value="${escapeHtml(row.label)}">
-        <div class="field-row">
-          <div><label class="field-label">Portion (g)</label><input type="number" class="row-portion" data-index="${index}" value="${row.portion_g}" min="1"></div>
-          <div><label class="field-label">kcal / 100g</label><input type="number" class="row-kcal" data-index="${index}" value="${row.per100.kcal}" step="0.1"></div>
-        </div>
-        <div class="field-row">
-          <div><label class="field-label">Protéines / 100g</label><input type="number" class="row-prot" data-index="${index}" value="${row.per100.protein_g}" step="0.1"></div>
-          <div><label class="field-label">Lipides / 100g</label><input type="number" class="row-fat" data-index="${index}" value="${row.per100.fat_g}" step="0.1"></div>
-        </div>
-        <label class="field-label">Glucides / 100g</label>
-        <input type="number" class="row-carb" data-index="${index}" value="${row.per100.carb_g}" step="0.1">
-        <div class="empty-hint row-total-preview" data-index="${index}" style="padding:4px 0 0">${m.kcal} kcal · P${fmt1(m.protein_g)} L${fmt1(m.fat_g)} G${fmt1(m.carb_g)}</div>
+        ${renderPer100FieldsHtml(row, { prefix: 'row', mode: 'class', index }, { previewWithPortion: false })}
 
         ${
           row.ciqualCandidates.length > 1
@@ -191,6 +216,8 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
         rows = await Promise.all(result.components.map(componentToRow));
       }
       state = 'reviewing';
+      expandedRows = new Set(rows.length === 1 ? [0] : []);
+      rowKcalTouched = new Set();
     } catch (e) {
       errorMsg = `Analyse impossible (${(e as Error).message}) — vérifie la connexion et réessaie.`;
       state = 'error';
@@ -236,6 +263,8 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
         },
       ];
       state = 'reviewing';
+      expandedRows = new Set([0]); // barcode scans always produce exactly one row
+      rowKcalTouched = new Set();
     }
     render();
   }
@@ -290,10 +319,23 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
     if (macroEl) macroEl.textContent = `P${fmt1(totals.protein_g)} · L${fmt1(totals.fat_g)} · G${fmt1(totals.carb_g)}`;
   }
 
+  // Per-row touched-kcal guard — same purpose as Day/Habits' single-form version (see
+  // handleFoodEntryKcalGuardInput in foodEntryForm.ts), just keyed by row index since N rows
+  // can be open at once here.
   container.addEventListener('input', (e) => {
     const target = e.target as HTMLElement;
     if (!(target instanceof HTMLInputElement)) return;
     if (target.dataset.index === undefined || !ROW_FIELD_CLASSES.some((c) => target.classList.contains(c))) return;
+    const index = Number(target.dataset.index);
+    if (target.classList.contains('row-kcal')) {
+      rowKcalTouched.add(index);
+    } else if (!rowKcalTouched.has(index) && (target.classList.contains('row-prot') || target.classList.contains('row-fat') || target.classList.contains('row-carb'))) {
+      const prot = parseFloat(container.querySelector<HTMLInputElement>(`.row-prot[data-index="${index}"]`)!.value) || 0;
+      const fat = parseFloat(container.querySelector<HTMLInputElement>(`.row-fat[data-index="${index}"]`)!.value) || 0;
+      const carb = parseFloat(container.querySelector<HTMLInputElement>(`.row-carb[data-index="${index}"]`)!.value) || 0;
+      const kcalInput = container.querySelector<HTMLInputElement>(`.row-kcal[data-index="${index}"]`);
+      if (kcalInput) kcalInput.value = String(kcalFromMacros(prot, fat, carb));
+    }
     readRowFieldsFromDom();
     updateScanTotals();
   });
@@ -331,12 +373,23 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
       overallNote = '';
       recognizedHabitLabel = null;
       saveAsHabit = false;
+      expandedRows = new Set();
+      rowKcalTouched = new Set();
+      render();
+      return;
+    }
+    if (action === 'toggle-row') {
+      const idx = Number(target.dataset.index);
+      if (expandedRows.has(idx)) expandedRows.delete(idx);
+      else expandedRows.add(idx);
       render();
       return;
     }
     if (action === 'remove-row') {
       readRowFieldsFromDom();
-      rows.splice(Number(target.dataset.index), 1);
+      const idx = Number(target.dataset.index);
+      rows.splice(idx, 1);
+      reindexAfterRemoval(idx);
       render();
       return;
     }
@@ -349,6 +402,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
         row.label = chosen.label;
         row.per100 = chosen.per100;
         row.source = 'ciqual';
+        rowKcalTouched.delete(idx);
       }
       render();
       return;
@@ -380,6 +434,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
         row.per100 = p.per100;
         row.source = 'off';
         row.offResults = [];
+        rowKcalTouched.delete(idx);
       }
       render();
       return;
@@ -445,6 +500,8 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
       overallNote = '';
       recognizedHabitLabel = null;
       saveAsHabit = false;
+      expandedRows = new Set();
+      rowKcalTouched = new Set();
       render();
       return;
     }

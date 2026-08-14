@@ -155,6 +155,13 @@ p.hint {
   transition: border-color 0.2s ease;
 }
 
+/* Visually recedes behind a screen's own hero card (e.g. Progress tab's weight-goal card) —
+   same box model as .card, lighter border, no surface fill. */
+.card-quiet {
+  background: transparent;
+  border-color: var(--bg);
+}
+
 textarea {
   width: 100%;
   height: 200px;
@@ -377,6 +384,18 @@ label.field-label {
   display: flex;
   gap: 6px;
   flex-shrink: 0;
+  align-items: center;
+}
+
+/* Collapsed/expanded indicator for PhotoScanScreen's per-component rows. */
+.row-chevron {
+  display: inline-block;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.row-chevron.expanded {
+  transform: rotate(90deg);
 }
 
 .search-result {
@@ -636,7 +655,6 @@ label.field-label {
 .goal-bar-fill {
   height: 100%;
   background: var(--accent);
-  box-shadow: 0 0 8px var(--accent-glow);
   transition: width 0.4s ease-out;
 }
 

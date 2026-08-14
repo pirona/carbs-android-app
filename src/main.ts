@@ -9,6 +9,7 @@ import { HabitsRepo } from './storage/repos/habitsRepo';
 import { FoodLogRepo } from './storage/repos/foodLogRepo';
 import { ProfileRepo } from './storage/repos/profileRepo';
 import { renderDayScreen, type DayScreenRepos } from './ui/screens/DayScreen';
+import { renderProgressScreen, type ProgressScreenRepos } from './ui/screens/ProgressScreen';
 import { renderWeekScreen, type WeekScreenRepos } from './ui/screens/WeekScreen';
 import { renderHabitsScreen } from './ui/screens/HabitsScreen';
 import { renderSettingsScreen, type SettingsScreenRepos } from './ui/screens/SettingsScreen';
@@ -52,15 +53,19 @@ nextcloud.load().then(async (settings) => {
 });
 
 const dayRepos: DayScreenRepos = { dayHistory, sport, foodLog, plaisir, habits, profile };
-const weekRepos: WeekScreenRepos = { dayHistory, carbHistory, plaisir, sport, profile };
+const progressRepos: ProgressScreenRepos = { dayHistory, carbHistory, plaisir, sport, profile };
+const weekRepos: WeekScreenRepos = { dayHistory, plaisir, sport, profile };
 const settingsRepos: SettingsScreenRepos = { dayHistory, carbHistory, plaisir, sport, habits, foodLog, profile, theme, nextcloud };
 const photoScanRepos: PhotoScanScreenRepos = { habits, foodLog };
 
 // "Scan" sits right after "Jour" — photo entry is the primary adoption driver for this
 // app (see project memory), not a secondary feature bolted on after the core screens.
-type TabId = 'day' | 'scan' | 'week' | 'habits' | 'settings';
+// "Progrès" sits right after "Jour" too — the read-only/low-frequency content pulled off
+// Day and Week (weight-goal, plaisir declaration, weekly stats, weight chart) lives there.
+type TabId = 'day' | 'progress' | 'scan' | 'week' | 'habits' | 'settings';
 const TABS: { id: TabId; label: string; render: (el: HTMLElement) => void }[] = [
   { id: 'day', label: 'Jour', render: (el) => renderDayScreen(el, dayRepos, healthConnect) },
+  { id: 'progress', label: '📈 Progrès', render: (el) => renderProgressScreen(el, progressRepos) },
   { id: 'scan', label: '📷 Scan', render: (el) => renderPhotoScanScreen(el, photoScanRepos) },
   { id: 'week', label: 'Semaine', render: (el) => renderWeekScreen(el, weekRepos) },
   { id: 'habits', label: 'Habitudes', render: (el) => renderHabitsScreen(el, { habits }) },

@@ -4,11 +4,17 @@
 // is dropped — no cross-device sync in this app.
 import type { HabitsRepo, HabitSortMode } from '../../storage/repos/habitsRepo';
 import type { DayType, Habit, Per100 } from '../../core/types';
-import { searchOFF, type OffProduct } from '../../integrations/openFoodFacts';
-import { lookupOFF, scanBarcode } from '../../integrations/barcodeScan';
-import { parseFoodText } from '../../integrations/n8nFoodParse';
-import { computeFoodMacros, kcalFromMacros } from '../../core/calc/food';
-import { escapeHtml, fmt1 } from '../util';
+import { type OffProduct } from '../../integrations/openFoodFacts';
+import {
+  type FoodEntryPrefill,
+  renderFoodConfirmStepHtml,
+  handleFoodEntryKcalGuardInput,
+  searchOffProducts,
+  scanBarcodeAndLookup,
+  interpretFoodTextWithAI,
+} from '../forms/foodEntryForm';
+import { computeFoodMacros } from '../../core/calc/food';
+import { escapeHtml, fmt1, attachLongPress } from '../util';
 
 interface FormState {
   mode: 'add' | 'edit';
@@ -21,18 +27,7 @@ interface FormState {
   aiQuery: string;
   aiLoading: boolean;
   aiError: string | null;
-  prefill?: {
-    label: string;
-    off_code: string | null;
-    source: Habit['source'];
-    portion_g: number;
-    per100: Per100;
-    day_type_tag: DayType | null;
-    meal_slot: Habit['meal_slot'];
-    ai_source_text?: string;
-    ai_confidence?: string | null;
-    ai_note?: string | null;
-  };
+  prefill?: FoodEntryPrefill & { day_type_tag: DayType | null; meal_slot: Habit['meal_slot'] };
 }
 
 const DAYTYPE_LABEL: Record<string, string> = { high: 'HIGH', medium: 'MEDIUM', low: 'LOW' };
@@ -59,8 +54,8 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
   let form: FormState | null = null;
   // True once the user has directly edited #f-kcal in the open form — once touched, macro
   // edits stop overwriting it (a printed label's kcal can legitimately differ slightly from
-  // the Atwater estimate below, e.g. fiber/rounding).
-  let kcalTouched = false;
+  // the Atwater estimate below, e.g. fiber/rounding). Ref object, see foodEntryForm.ts.
+  const kcalTouched = { value: false };
 
   function habitRow(h: Habit): string {
     const m = computeFoodMacros(h.per100, h.portion_g);
@@ -69,7 +64,7 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
       .join(' · ');
     return `
       <div class="habit-row">
-        <div class="habit-info">
+        <div class="habit-info" data-id="${h.id}">
           <div class="habit-label">${h.source === 'ai' ? '🤖 ' : ''}${escapeHtml(h.label)}</div>
           <div class="habit-sub">${h.portion_g} g · ${m.kcal} kcal · P${fmt1(m.protein_g)} L${fmt1(m.fat_g)} G${fmt1(m.carb_g)}</div>
           ${tags ? `<div class="habit-sub" style="color:var(--medium)">🔧 ${tags}</div>` : ''}
@@ -118,48 +113,10 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
 
   function formConfirmStep(f: FormState): string {
     const p = f.prefill!;
-    return `
-      <div class="form-block">
-        ${
-          p.source === 'ai'
-            ? `
-          <div class="ai-banner">
-            <div class="ai-banner-title">🤖 Estimation IA — à vérifier</div>
-            <div>Entrée : « ${escapeHtml(p.ai_source_text)} »</div>
-            ${p.ai_confidence ? `<div>Confiance : ${escapeHtml(p.ai_confidence)}</div>` : ''}
-            ${p.ai_note ? `<div>Remarque : ${escapeHtml(p.ai_note)}</div>` : ''}
-          </div>`
-            : ''
-        }
-        <label class="field-label">Nom</label>
-        <input type="text" id="f-label" value="${escapeHtml(p.label)}">
-        <div class="field-row">
-          <div>
-            <label class="field-label">Portion (g)</label>
-            <input type="number" id="f-portion" value="${p.portion_g}" min="1">
-          </div>
-          <div>
-            <label class="field-label">kcal / 100g</label>
-            <input type="number" id="f-kcal" value="${p.per100.kcal}" step="0.1">
-          </div>
-        </div>
-        <div class="field-row">
-          <div>
-            <label class="field-label">Protéines / 100g</label>
-            <input type="number" id="f-prot" value="${p.per100.protein_g}" step="0.1">
-          </div>
-          <div>
-            <label class="field-label">Lipides / 100g</label>
-            <input type="number" id="f-fat" value="${p.per100.fat_g}" step="0.1">
-          </div>
-        </div>
-        <label class="field-label">Glucides / 100g</label>
-        <input type="number" id="f-carb" value="${p.per100.carb_g}" step="0.1">
-        ${(() => {
-          const m = computeFoodMacros(p.per100, p.portion_g);
-          return `<div class="empty-hint" id="f-total-preview" style="padding:4px 0 0">Pour ${p.portion_g} g : ${m.kcal} kcal · P${fmt1(m.protein_g)} L${fmt1(m.fat_g)} G${fmt1(m.carb_g)}</div>`;
-        })()}
-
+    return renderFoodConfirmStepHtml(p, {
+      idPrefix: 'f',
+      actions: { cancel: 'close-form', save: 'save-habit' },
+      afterFieldsHtml: `
         <label class="field-label">Type de jour (optionnel)</label>
         <select id="f-daytype">
           <option value="" ${!p.day_type_tag ? 'selected' : ''}>Auto (selon glucides)</option>
@@ -173,13 +130,8 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
           <option value="petit_dej" ${p.meal_slot === 'petit_dej' ? 'selected' : ''}>Petit-déjeuner</option>
           <option value="dejeuner" ${p.meal_slot === 'dejeuner' ? 'selected' : ''}>Déjeuner</option>
           <option value="diner" ${p.meal_slot === 'diner' ? 'selected' : ''}>Dîner</option>
-        </select>
-
-        <div class="form-actions">
-          <button class="btn btn-cancel" data-action="close-form">Annuler</button>
-          <button class="btn btn-save" data-action="save-habit">Enregistrer</button>
-        </div>
-      </div>`;
+        </select>`,
+    });
   }
 
   function render() {
@@ -209,10 +161,12 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
     form.loading = true;
     form.error = null;
     render();
-    try {
-      form.results = await searchOFF(q);
-    } catch {
-      form.error = 'Recherche impossible — vérifier la connexion.';
+    const result = await searchOffProducts(q);
+    if (!form) return; // form was closed while the search was in flight
+    if (result.ok) {
+      form.results = result.results;
+    } else {
+      form.error = result.error;
       form.results = [];
     }
     form.loading = false;
@@ -223,7 +177,7 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
     if (!form) return;
     const p = form.results[index];
     form.step = 'confirm';
-    kcalTouched = false;
+    kcalTouched.value = false;
     form.prefill = {
       label: p.name,
       off_code: p.code,
@@ -238,27 +192,23 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
 
   async function doBarcodeScan() {
     if (!form) return;
-    const scan = await scanBarcode();
-    if (scan.status === 'cancelled') return;
-    if (!form) return; // form was closed (Annuler) while the scanner was open
-    if (scan.status === 'error') {
-      form.error = `Scan impossible (${scan.message})`;
-      render();
-      return;
-    }
     form.loading = true;
     form.error = null;
     render();
-    const result = await lookupOFF(scan.code);
-    if (!form) return; // form was closed while the OFF lookup was in flight
+    const result = await scanBarcodeAndLookup();
+    if (!form) return; // form was closed (Annuler) while the scanner/lookup was in flight
     form.loading = false;
-    if (result.status === 'not-found') {
-      form.error = 'Produit introuvable pour ce code-barres — réessaie ou saisis à la main.';
-    } else if (result.status === 'error') {
+    if (result.status === 'cancelled') {
+      render();
+      return;
+    }
+    if (result.status === 'error') {
       form.error = result.message;
+    } else if (result.status === 'not-found') {
+      form.error = 'Produit introuvable pour ce code-barres — réessaie ou saisis à la main.';
     } else {
       form.step = 'confirm';
-      kcalTouched = false;
+      kcalTouched.value = false;
       form.prefill = {
         label: result.product.name,
         off_code: result.product.code,
@@ -279,24 +229,14 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
     form.aiLoading = true;
     form.aiError = null;
     render();
-    try {
-      const result = await parseFoodText(text);
+    const result = await interpretFoodTextWithAI(text);
+    if (!form) return; // form was closed while the AI call was in flight
+    if (result.ok) {
       form.step = 'confirm';
-      kcalTouched = false;
-      form.prefill = {
-        label: result.label,
-        off_code: null,
-        source: 'ai',
-        portion_g: result.portion_g,
-        per100: result.per100,
-        day_type_tag: null,
-        meal_slot: null,
-        ai_source_text: text,
-        ai_confidence: result.confidence,
-        ai_note: result.note,
-      };
-    } catch (e) {
-      form.aiError = `Interprétation impossible (${(e as Error).message}) — réessaie ou saisis à la main.`;
+      kcalTouched.value = false;
+      form.prefill = { ...result.prefill, day_type_tag: null, meal_slot: null };
+    } else {
+      form.aiError = result.error;
     }
     form.aiLoading = false;
     render();
@@ -305,7 +245,7 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
   function useManualEntry() {
     if (!form) return;
     form.step = 'confirm';
-    kcalTouched = false;
+    kcalTouched.value = false;
     form.prefill = {
       label: form.query || '',
       off_code: null,
@@ -321,7 +261,7 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
   function openEditForm(id: string) {
     const h = habits.find((x) => x.id === id);
     if (!h) return;
-    kcalTouched = false;
+    kcalTouched.value = false;
     form = {
       mode: 'edit',
       editId: id,
@@ -395,45 +335,18 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
     render();
   }
 
-  // Recomputes the "Pour X g : ..." readout from the confirm form's current field values —
-  // called on every keystroke so the actual portion total (not the /100g reference fields)
-  // stays truthful without a full render() wiping focus mid-typing.
-  function updateTotalPreview() {
-    const portionInput = container.querySelector<HTMLInputElement>('#f-portion');
-    const kcalInput = container.querySelector<HTMLInputElement>('#f-kcal');
-    const protInput = container.querySelector<HTMLInputElement>('#f-prot');
-    const fatInput = container.querySelector<HTMLInputElement>('#f-fat');
-    const carbInput = container.querySelector<HTMLInputElement>('#f-carb');
-    const preview = container.querySelector<HTMLElement>('#f-total-preview');
-    if (!portionInput || !kcalInput || !protInput || !fatInput || !carbInput || !preview) return;
-    const portion = parseFloat(portionInput.value) || 0;
-    const per100: Per100 = {
-      kcal: parseFloat(kcalInput.value) || 0,
-      protein_g: parseFloat(protInput.value) || 0,
-      fat_g: parseFloat(fatInput.value) || 0,
-      carb_g: parseFloat(carbInput.value) || 0,
-    };
-    const m = computeFoodMacros(per100, portion);
-    preview.textContent = `Pour ${portion} g : ${m.kcal} kcal · P${fmt1(m.protein_g)} L${fmt1(m.fat_g)} G${fmt1(m.carb_g)}`;
-  }
+  // Long-press the row's label/sub area (not .habit-actions — the ✎/✕ buttons are their own,
+  // already-explicit affordance) as a faster alternative to tapping ✕.
+  attachLongPress(container, '.habit-info', 500, (target) => {
+    if (target.dataset.id) deleteHabit(target.dataset.id);
+  });
 
   // 'input' fires on every keystroke (unlike 'change', which only fires on blur) — needed
   // for the kcal-from-macros recompute to actually feel live while typing.
   container.addEventListener('input', (e) => {
     const target = e.target as HTMLInputElement;
     if (!form || form.step !== 'confirm') return;
-    if (target.id === 'f-kcal') {
-      kcalTouched = true;
-    } else if (!kcalTouched && ['f-prot', 'f-fat', 'f-carb'].includes(target.id)) {
-      const prot = parseFloat(container.querySelector<HTMLInputElement>('#f-prot')!.value) || 0;
-      const fat = parseFloat(container.querySelector<HTMLInputElement>('#f-fat')!.value) || 0;
-      const carb = parseFloat(container.querySelector<HTMLInputElement>('#f-carb')!.value) || 0;
-      const kcalInput = container.querySelector<HTMLInputElement>('#f-kcal');
-      if (kcalInput) kcalInput.value = String(kcalFromMacros(prot, fat, carb));
-    }
-    if (['f-portion', 'f-kcal', 'f-prot', 'f-fat', 'f-carb'].includes(target.id)) {
-      updateTotalPreview();
-    }
+    handleFoodEntryKcalGuardInput(container, 'f', target.id, kcalTouched);
   });
 
   container.addEventListener('click', (e) => {

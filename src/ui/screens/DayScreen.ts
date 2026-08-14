@@ -1,23 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Today's view — day-type badge, macro targets, weight/sport inputs, plaisir toggle,
-// weight-goal bar, and the "Aujourd'hui" direct food log. Port of carb-cycling.html's
-// main render() (day-focused parts only — semainier/history/fidelity live in WeekScreen).
+// Today's view — day-type badge, macro targets, weight/sport inputs, and the "Aujourd'hui"
+// direct food log. Weight-goal bar and plaisir-day declaration live in ProgressScreen now
+// (see plan §redesign — kept them off this screen's primary above-the-fold content).
 // Health Connect (Phase 4) pre-fills steps/activeCalories when granted — never a hard
 // dependency, manual sport_kcal entry always stays the primary/overridable signal.
-import type { DayType, Habit, LogEntry, PlaisirLevel, Profile } from '../../core/types';
-import { PLAISIR_CYCLE, PLAISIR_LEVELS } from '../../core/types';
+import type { DayType, Habit, LogEntry, Profile } from '../../core/types';
 import type { DayTrackingRepos, DaySnapshot } from '../../app/dayTracking';
 import { refreshDaySnapshot } from '../../app/dayTracking';
 import type { HabitsRepo, HabitSortMode } from '../../storage/repos/habitsRepo';
 import type { ProfileRepo } from '../../storage/repos/profileRepo';
 import type { HealthConnectAdapter, HealthConnectSignals } from '../../integrations/healthConnect/HealthConnectAdapter';
-import { computeFoodMacros, kcalFromMacros } from '../../core/calc/food';
-import { calcWeightGoalProgress } from '../../core/calc/weightGoal';
-import { formatDateKey } from '../../core/calc/date';
-import { searchOFF, type OffProduct } from '../../integrations/openFoodFacts';
-import { lookupOFF, scanBarcode } from '../../integrations/barcodeScan';
-import { parseFoodText } from '../../integrations/n8nFoodParse';
-import { escapeHtml, fmt1 } from '../util';
+import { computeFoodMacros } from '../../core/calc/food';
+import { type OffProduct } from '../../integrations/openFoodFacts';
+import {
+  type FoodEntryPrefill,
+  renderFoodConfirmStepHtml,
+  updateFoodEntryTotalPreview,
+  handleFoodEntryKcalGuardInput,
+  searchOffProducts,
+  scanBarcodeAndLookup,
+  interpretFoodTextWithAI,
+} from '../forms/foodEntryForm';
+import { escapeHtml, fmt1, attachLongPress } from '../util';
 
 export interface DayScreenRepos extends DayTrackingRepos {
   habits: HabitsRepo;
@@ -35,16 +39,7 @@ interface LogFormState {
   aiQuery: string;
   aiLoading: boolean;
   aiError: string | null;
-  prefill?: {
-    label: string;
-    off_code: string | null;
-    source: Habit['source'];
-    portion_g: number;
-    per100: { kcal: number; protein_g: number; fat_g: number; carb_g: number };
-    ai_source_text?: string;
-    ai_confidence?: string | null;
-    ai_note?: string | null;
-  };
+  prefill?: FoodEntryPrefill;
 }
 
 const DAYTYPE_LABEL: Record<DayType, string> = { high: 'HIGH CARB', medium: 'MEDIUM CARB', low: 'LOW CARB', plaisir: 'JOUR PLAISIR' };
@@ -62,8 +57,9 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
   let logEntries: LogEntry[] = [];
   let logForm: LogFormState | null = null;
   // Same "touched" guard as HabitsScreen.ts's #f-kcal — once the user edits #log-f-kcal
-  // directly, macro edits stop overwriting it.
-  let logKcalTouched = false;
+  // directly, macro edits stop overwriting it. Ref object so it can be passed by reference
+  // into the shared handleFoodEntryKcalGuardInput helper (see foodEntryForm.ts).
+  const logKcalTouched = { value: false };
   let hcAvailable = false;
   let hcGranted = false;
   let hcSignals: HealthConnectSignals = { steps: null, activeCaloriesKcal: null };
@@ -107,30 +103,6 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       </div>`;
   }
 
-  function plaisirCycleRow(): string {
-    const today = formatDateKey(now());
-    const currentLevel = snapshot!.dayType.type === 'plaisir' ? overrideLevelForToday() : null;
-    const btn = (level: PlaisirLevel) => {
-      const lv = PLAISIR_LEVELS[level];
-      const sel = currentLevel === level;
-      return `<button class="plaisir-btn ${sel ? 'active' : ''}" data-action="plaisir" data-level="${level}">
-        <div>${lv.icon}</div><div class="plaisir-btn-label">${lv.label}</div><div class="plaisir-btn-kcal">${lv.kcal} kcal</div>
-      </button>`;
-    };
-    return `
-      <div class="plaisir-row">
-        ${PLAISIR_CYCLE.filter((l): l is PlaisirLevel => l !== null).map(btn).join('')}
-      </div>
-      ${currentLevel ? '<button class="btn btn-cancel" data-action="clear-plaisir">Effacer le jour plaisir</button>' : ''}
-      <div class="empty-hint" data-anchor="today-key" data-value="${today}"></div>
-    `;
-  }
-
-  let currentOverrideLevel: PlaisirLevel | null = null;
-  function overrideLevelForToday(): PlaisirLevel | null {
-    return currentOverrideLevel;
-  }
-
   function healthConnectStatusHtml(): string {
     if (!hcAvailable) return '';
     if (!hcGranted) {
@@ -142,19 +114,6 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
     const stepsLabel = hcSignals.steps !== null ? `${fmt(hcSignals.steps)} pas` : 'pas indisponibles aujourd\'hui';
     return `
       <div class="form-block empty-hint" style="padding-bottom:0">📱 Health Connect : ${stepsLabel}</div>`;
-  }
-
-  function weightGoalCard(): string {
-    const p = calcWeightGoalProgress(profile, snapshot!.current.weight_kg ?? profile.weight_default_kg);
-    if (!p) return '';
-    const w = snapshot!.current.weight_kg ?? profile.weight_default_kg;
-    return `
-      <div class="card">
-        <div class="list-header"><h2>🎯 Objectif poids</h2><span style="color:var(--high);font-weight:700">${p.pct}%</span></div>
-        <div class="goal-labels"><span>${profile.weight_start_kg} kg</span><span style="color:var(--text)">${w} kg</span><span>${profile.weight_goal_kg} kg</span></div>
-        <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${p.pct}%"></div></div>
-        <div class="goal-labels"><span style="color:${p.lost > 0 ? 'var(--high)' : 'var(--text-muted)'}">−${Math.max(0, p.lost)} kg perdus</span><span>${p.remain} kg restants</span></div>
-      </div>`;
   }
 
   function habitChips(): string {
@@ -214,52 +173,20 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
           </div>
         </div>`;
     }
-    const p = f.prefill!;
-    return `
-      <div class="form-block">
-        ${
-          p.source === 'ai'
-            ? `
-          <div class="ai-banner">
-            <div class="ai-banner-title">🤖 Estimation IA — à vérifier</div>
-            <div>Entrée : « ${escapeHtml(p.ai_source_text)} »</div>
-            ${p.ai_confidence ? `<div>Confiance : ${escapeHtml(p.ai_confidence)}</div>` : ''}
-            ${p.ai_note ? `<div>Remarque : ${escapeHtml(p.ai_note)}</div>` : ''}
-          </div>`
-            : ''
-        }
-        <label class="field-label">Nom</label>
-        <input type="text" id="log-f-label" value="${escapeHtml(p.label)}">
-        <div class="field-row">
-          <div>
-            <label class="field-label">Portion (g)</label>
-            <input type="number" id="log-f-portion" value="${p.portion_g}" min="1">
-            <div class="form-actions" style="margin:6px 0 8px">
-              <button type="button" class="btn" data-action="log-portion-multiply" data-factor="2">×2</button>
-              <button type="button" class="btn" data-action="log-portion-multiply" data-factor="3">×3</button>
-            </div>
-          </div>
-          <div><label class="field-label">kcal / 100g</label><input type="number" id="log-f-kcal" value="${p.per100.kcal}" step="0.1"></div>
-        </div>
-        <div class="field-row">
-          <div><label class="field-label">Protéines / 100g</label><input type="number" id="log-f-prot" value="${p.per100.protein_g}" step="0.1"></div>
-          <div><label class="field-label">Lipides / 100g</label><input type="number" id="log-f-fat" value="${p.per100.fat_g}" step="0.1"></div>
-        </div>
-        <label class="field-label">Glucides / 100g</label>
-        <input type="number" id="log-f-carb" value="${p.per100.carb_g}" step="0.1">
-        ${(() => {
-          const m = computeFoodMacros(p.per100, p.portion_g);
-          return `<div class="empty-hint" id="log-f-total-preview" style="padding:4px 0 0">Pour ${p.portion_g} g : ${m.kcal} kcal · P${fmt1(m.protein_g)} L${fmt1(m.fat_g)} G${fmt1(m.carb_g)}</div>`;
-        })()}
+    return renderFoodConfirmStepHtml(f.prefill!, {
+      idPrefix: 'log-f',
+      actions: { cancel: 'log-close', save: 'log-save' },
+      portionExtraHtml: `
+        <div class="form-actions" style="margin:6px 0 8px">
+          <button type="button" class="btn" data-action="log-portion-multiply" data-factor="2">×2</button>
+          <button type="button" class="btn" data-action="log-portion-multiply" data-factor="3">×3</button>
+        </div>`,
+      afterFieldsHtml: `
         <label class="checkbox-label">
           <input type="checkbox" id="log-f-save-habit" ${f.saveAsHabit ? 'checked' : ''}>
           💾 Sauver aussi en habitude
-        </label>
-        <div class="form-actions">
-          <button class="btn btn-cancel" data-action="log-close">Annuler</button>
-          <button class="btn btn-save" data-action="log-save">Enregistrer</button>
-        </div>
-      </div>`;
+        </label>`,
+    });
   }
 
   function todayCard(): string {
@@ -355,37 +282,10 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
           <div class="empty-hint" style="text-align:center">${escapeHtml(snap.dayType.source)}</div>
         `
         }
-        <div class="form-block">
-          <div class="empty-hint" style="padding-bottom:6px">Déclarer un jour plaisir aujourd'hui :</div>
-          ${plaisirCycleRow()}
-        </div>
       </div>
 
-      ${weightGoalCard()}
       ${todayCard()}
     `;
-  }
-
-  // Recomputes the "Pour X g : ..." readout from the confirm form's current field values —
-  // called on every keystroke so the actual portion total (not the /100g reference fields)
-  // stays truthful without a full render() wiping focus mid-typing.
-  function updateLogTotalPreview() {
-    const portionInput = container.querySelector<HTMLInputElement>('#log-f-portion');
-    const kcalInput = container.querySelector<HTMLInputElement>('#log-f-kcal');
-    const protInput = container.querySelector<HTMLInputElement>('#log-f-prot');
-    const fatInput = container.querySelector<HTMLInputElement>('#log-f-fat');
-    const carbInput = container.querySelector<HTMLInputElement>('#log-f-carb');
-    const preview = container.querySelector<HTMLElement>('#log-f-total-preview');
-    if (!portionInput || !kcalInput || !protInput || !fatInput || !carbInput || !preview) return;
-    const portion = parseFloat(portionInput.value) || 0;
-    const per100 = {
-      kcal: parseFloat(kcalInput.value) || 0,
-      protein_g: parseFloat(protInput.value) || 0,
-      fat_g: parseFloat(fatInput.value) || 0,
-      carb_g: parseFloat(carbInput.value) || 0,
-    };
-    const m = computeFoodMacros(per100, portion);
-    preview.textContent = `Pour ${portion} g : ${m.kcal} kcal · P${fmt1(m.protein_g)} L${fmt1(m.fat_g)} G${fmt1(m.carb_g)}`;
   }
 
   async function withRefresh(action: () => Promise<void> | void) {
@@ -393,6 +293,20 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
     await refresh();
     render();
   }
+
+  // Long-press a habit chip to delete it — the quick-log chip row has no other delete
+  // affordance (that's the Habitudes library screen's job), but forcing a trip there just to
+  // remove a mislogged/duplicate habit is friction worth cutting.
+  attachLongPress(container, '[data-action="log-habit"]', 500, async (target) => {
+    const h = habits.find((x) => x.id === target.dataset.id);
+    if (!h) return;
+    if (!confirm(`Supprimer l'habitude "${h.label}" ?`)) return;
+    await withRefresh(async () => {
+      const newHabits = (await repos.habits.load()).filter((x) => x.id !== h.id);
+      await repos.habits.save(newHabits);
+      habits = newHabits;
+    });
+  });
 
   container.addEventListener('click', async (e) => {
     const target = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
@@ -429,32 +343,6 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       await withRefresh(async () => {
         await health.requestPermissions();
         await refreshHealthConnect();
-      });
-      return;
-    }
-    if (action === 'plaisir') {
-      const level = target.dataset.level as PlaisirLevel;
-      await withRefresh(async () => {
-        const today = formatDateKey(now());
-        const overrides = await repos.plaisir.loadOverrides(now());
-        if (overrides.levels[today] === level) {
-          delete overrides.levels[today];
-          currentOverrideLevel = null;
-        } else {
-          overrides.levels[today] = level;
-          currentOverrideLevel = level;
-        }
-        await repos.plaisir.saveOverrides(overrides, now());
-      });
-      return;
-    }
-    if (action === 'clear-plaisir') {
-      await withRefresh(async () => {
-        const today = formatDateKey(now());
-        const overrides = await repos.plaisir.loadOverrides(now());
-        delete overrides.levels[today];
-        currentOverrideLevel = null;
-        await repos.plaisir.saveOverrides(overrides, now());
       });
       return;
     }
@@ -513,10 +401,12 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       logForm.loading = true;
       logForm.error = null;
       render();
-      try {
-        logForm.results = await searchOFF(q);
-      } catch {
-        logForm.error = 'Recherche impossible — vérifier la connexion.';
+      const result = await searchOffProducts(q);
+      if (!logForm) return; // form was closed while the search was in flight
+      if (result.ok) {
+        logForm.results = result.results;
+      } else {
+        logForm.error = result.error;
         logForm.results = [];
       }
       logForm.loading = false;
@@ -528,30 +418,20 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       logForm.scanning = true;
       logForm.error = null;
       render();
-      const scan = await scanBarcode();
-      if (!logForm) return; // form was closed (Annuler) while the scanner was open
+      const result = await scanBarcodeAndLookup();
+      if (!logForm) return; // form was closed (Annuler) while the scanner/lookup was in flight
       logForm.scanning = false;
-      if (scan.status === 'cancelled') {
+      if (result.status === 'cancelled') {
         render();
         return;
       }
-      if (scan.status === 'error') {
-        logForm.error = `Scan impossible (${scan.message})`;
-        render();
-        return;
-      }
-      logForm.loading = true;
-      render();
-      const result = await lookupOFF(scan.code);
-      if (!logForm) return; // form was closed while the OFF lookup was in flight
-      logForm.loading = false;
-      if (result.status === 'not-found') {
-        logForm.error = 'Produit introuvable pour ce code-barres — réessaie ou saisis à la main.';
-      } else if (result.status === 'error') {
+      if (result.status === 'error') {
         logForm.error = result.message;
+      } else if (result.status === 'not-found') {
+        logForm.error = 'Produit introuvable pour ce code-barres — réessaie ou saisis à la main.';
       } else {
         logForm.step = 'confirm';
-        logKcalTouched = false;
+        logKcalTouched.value = false;
         logForm.prefill = {
           label: result.product.name,
           off_code: result.product.code,
@@ -569,7 +449,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       if (input && factor) {
         const current = parseFloat(input.value) || 0;
         input.value = String(Math.round(current * factor));
-        updateLogTotalPreview();
+        updateFoodEntryTotalPreview(container, 'log-f');
       }
       return;
     }
@@ -577,7 +457,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       if (!logForm) return;
       const p = logForm.results[Number(target.dataset.index)];
       logForm.step = 'confirm';
-      logKcalTouched = false;
+      logKcalTouched.value = false;
       logForm.prefill = { label: p.name, off_code: p.code, source: 'off', portion_g: p.servingGrams ?? 100, per100: p.per100 };
       render();
       return;
@@ -589,22 +469,14 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       logForm.aiLoading = true;
       logForm.aiError = null;
       render();
-      try {
-        const result = await parseFoodText(text);
+      const result = await interpretFoodTextWithAI(text);
+      if (!logForm) return; // form was closed while the AI call was in flight
+      if (result.ok) {
         logForm.step = 'confirm';
-        logKcalTouched = false;
-        logForm.prefill = {
-          label: result.label,
-          off_code: null,
-          source: 'ai',
-          portion_g: result.portion_g,
-          per100: result.per100,
-          ai_source_text: text,
-          ai_confidence: result.confidence,
-          ai_note: result.note,
-        };
-      } catch (e) {
-        logForm.aiError = `Interprétation impossible (${(e as Error).message}) — réessaie ou saisis à la main.`;
+        logKcalTouched.value = false;
+        logForm.prefill = result.prefill;
+      } else {
+        logForm.aiError = result.error;
       }
       logForm.aiLoading = false;
       render();
@@ -613,7 +485,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
     if (action === 'log-manual') {
       if (!logForm) return;
       logForm.step = 'confirm';
-      logKcalTouched = false;
+      logKcalTouched.value = false;
       logForm.prefill = {
         label: logForm.query || '',
         off_code: null,
@@ -681,18 +553,8 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
   // for the kcal-from-macros recompute to actually feel live while typing.
   container.addEventListener('input', (e) => {
     const target = e.target as HTMLInputElement;
-    if (target.id === 'log-f-kcal') {
-      logKcalTouched = true;
-    } else if (!logKcalTouched && logForm?.step === 'confirm' && ['log-f-prot', 'log-f-fat', 'log-f-carb'].includes(target.id)) {
-      const prot = parseFloat(container.querySelector<HTMLInputElement>('#log-f-prot')!.value) || 0;
-      const fat = parseFloat(container.querySelector<HTMLInputElement>('#log-f-fat')!.value) || 0;
-      const carb = parseFloat(container.querySelector<HTMLInputElement>('#log-f-carb')!.value) || 0;
-      const kcalInput = container.querySelector<HTMLInputElement>('#log-f-kcal');
-      if (kcalInput) kcalInput.value = String(kcalFromMacros(prot, fat, carb));
-    }
-    if (logForm?.step === 'confirm' && ['log-f-portion', 'log-f-kcal', 'log-f-prot', 'log-f-fat', 'log-f-carb'].includes(target.id)) {
-      updateLogTotalPreview();
-    }
+    if (logForm?.step !== 'confirm') return;
+    handleFoodEntryKcalGuardInput(container, 'log-f', target.id, logKcalTouched);
   });
 
   container.addEventListener('change', async (e) => {
@@ -724,8 +586,6 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
     profile = await repos.profile.load();
     habits = await repos.habits.load();
     habitSortMode = await repos.habits.loadSortMode();
-    const overrides = await repos.plaisir.loadOverrides(now());
-    currentOverrideLevel = overrides.levels[formatDateKey(now())] ?? null;
     await refreshHealthConnect();
     await refresh();
     render();
