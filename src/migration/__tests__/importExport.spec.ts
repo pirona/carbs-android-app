@@ -10,6 +10,7 @@ import { HabitsRepo } from '../../storage/repos/habitsRepo';
 import { FoodLogRepo } from '../../storage/repos/foodLogRepo';
 import { ProfileRepo } from '../../storage/repos/profileRepo';
 import { ThemeRepo } from '../../storage/repos/themeRepo';
+import { NextcloudRepo } from '../../storage/repos/nextcloudRepo';
 import { getISOWeek } from '../../core/calc/date';
 import type { DayEntry } from '../../core/types';
 
@@ -24,6 +25,7 @@ function makeRepos(): ImportRepos {
     foodLog: new FoodLogRepo(storage),
     profile: new ProfileRepo(storage),
     theme: new ThemeRepo(storage),
+    nextcloud: new NextcloudRepo(storage),
   };
 }
 

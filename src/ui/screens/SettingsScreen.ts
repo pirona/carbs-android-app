@@ -6,6 +6,10 @@ import type { ProfileRepo } from '../../storage/repos/profileRepo';
 import type { StorageAdapter } from '../../storage/StorageAdapter';
 import type { ImportRepos } from '../../migration/importExport';
 import { DEFAULT_THEME, type ThemeMode, type ThemeRepo, type ThemeSettings } from '../../storage/repos/themeRepo';
+import { DEFAULT_NEXTCLOUD, type NextcloudAutoBackupMode, type NextcloudSettings } from '../../storage/repos/nextcloudRepo';
+import { backupToNextcloud, restoreFromNextcloud, getNextcloudPassword, setNextcloudPassword } from '../../integrations/nextcloudWebdav';
+import { buildExportBlob } from '../../migration/exportDump';
+import { runImport } from '../../migration/importExport';
 import { applyTheme } from '../theme';
 import { renderExportScreen } from './ExportScreen';
 import { renderImportScreen } from './ImportScreen';
@@ -16,6 +20,7 @@ export interface SettingsScreenRepos extends ImportRepos {
 }
 
 const MODE_LABEL: Record<ThemeMode, string> = { auto: 'Auto', light: 'Clair', dark: 'Sombre' };
+const NC_MODE_LABEL: Record<NextcloudAutoBackupMode, string> = { off: 'Désactivé', launch: 'Au lancement' };
 
 // Fixed swatches instead of a free hue slider. --accent-h drives every color in style.css —
 // background, surfaces, text, borders, day-type/macro colors — so picking one of these reskins
@@ -33,6 +38,9 @@ const ACCENT_PRESETS: { name: string; hue: number }[] = [
 export function renderSettingsScreen(container: HTMLElement, repos: SettingsScreenRepos, storage: StorageAdapter): void {
   let profile: Profile;
   let theme: ThemeSettings = DEFAULT_THEME;
+  let nextcloud: NextcloudSettings = DEFAULT_NEXTCLOUD;
+  let ncHasPassword = false;
+  let ncRestorePreviewRaw: string | null = null;
 
   function render() {
     container.innerHTML = `
@@ -89,6 +97,36 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
       </div>
 
       <div class="card">
+        <h2>☁️ Nextcloud</h2>
+        <label class="field-label">URL du serveur</label>
+        <input type="url" id="nc-url" placeholder="https://nextcloud.exemple.fr" value="${nextcloud.url}">
+        <label class="field-label">Utilisateur</label>
+        <input type="text" id="nc-username" value="${nextcloud.username}">
+        <label class="field-label">App password ${ncHasPassword ? '(déjà enregistré — laisser vide pour le garder)' : ''}</label>
+        <input type="password" id="nc-password" placeholder="${ncHasPassword ? '••••••••' : 'app password dédié, pas ton mot de passe principal'}" autocomplete="off">
+        <p class="empty-hint" style="padding:0">Stocké chiffré (Android Keystore), jamais en clair sur disque.</p>
+        <label class="field-label">Sauvegarde automatique</label>
+        <div class="sort-toggle" style="margin-bottom:10px">
+          ${(['off', 'launch'] as NextcloudAutoBackupMode[])
+            .map((m) => `<button class="sort-btn ${nextcloud.autoBackupMode === m ? 'active' : ''}" data-action="nc-mode" data-mode="${m}">${NC_MODE_LABEL[m]}</button>`)
+            .join('')}
+        </div>
+        <p class="empty-hint" style="padding:0">
+          ${nextcloud.lastBackupAt
+            ? `Dernière sauvegarde : ${new Date(nextcloud.lastBackupAt).toLocaleString('fr-FR')} — ${nextcloud.lastBackupOk ? '✓ ok' : '✗ échec'}`
+            : 'Aucune sauvegarde effectuée pour le moment.'}
+        </p>
+        <button class="btn-cta" data-action="nc-save">💾 Enregistrer la config</button>
+        <button class="btn-secondary" data-action="nc-backup-now">☁️ Sauvegarder maintenant</button>
+        <button class="btn-secondary" data-action="nc-restore">⬇️ Restaurer depuis Nextcloud</button>
+        <div class="card" id="nc-restore-preview" style="display:none">
+          <div class="counts" id="nc-restore-counts"></div>
+          <button class="btn-cta" data-action="nc-restore-confirm">✅ Confirmer la restauration</button>
+        </div>
+        <div class="msg" id="nc-msg"></div>
+      </div>
+
+      <div class="card">
         <h2>📥 Migration / Restauration</h2>
         <div id="settings-import"></div>
       </div>
@@ -125,6 +163,117 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
       return;
     }
 
+    const ncModeBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-action="nc-mode"]');
+    if (ncModeBtn) {
+      nextcloud = { ...nextcloud, autoBackupMode: ncModeBtn.dataset.mode as NextcloudAutoBackupMode };
+      await repos.nextcloud.save(nextcloud);
+      render();
+      return;
+    }
+
+    const ncMsgEl = () => container.querySelector<HTMLDivElement>('#nc-msg')!;
+
+    if ((e.target as HTMLElement).closest('[data-action="nc-save"]')) {
+      const url = container.querySelector<HTMLInputElement>('#nc-url')!.value.trim();
+      const username = container.querySelector<HTMLInputElement>('#nc-username')!.value.trim();
+      const password = container.querySelector<HTMLInputElement>('#nc-password')!.value;
+      nextcloud = { ...nextcloud, url, username };
+      await repos.nextcloud.save(nextcloud);
+      if (password) {
+        await setNextcloudPassword(password);
+        ncHasPassword = true;
+      }
+      const msgEl = ncMsgEl();
+      msgEl.className = 'msg ok';
+      msgEl.textContent = '✓ Config enregistrée';
+      render();
+      return;
+    }
+
+    if ((e.target as HTMLElement).closest('[data-action="nc-backup-now"]')) {
+      const msgEl = ncMsgEl();
+      msgEl.className = 'msg';
+      msgEl.textContent = 'Sauvegarde en cours…';
+      const password = await getNextcloudPassword();
+      if (!password || !nextcloud.url || !nextcloud.username) {
+        msgEl.className = 'msg error';
+        msgEl.textContent = 'Enregistre la config (URL, utilisateur, app password) avant de sauvegarder.';
+        return;
+      }
+      try {
+        const blob = await buildExportBlob(storage);
+        await backupToNextcloud({ url: nextcloud.url, username: nextcloud.username }, password, blob);
+        nextcloud = { ...nextcloud, lastBackupAt: new Date().toISOString(), lastBackupOk: true };
+        await repos.nextcloud.save(nextcloud);
+        render();
+        ncMsgEl().className = 'msg ok';
+        ncMsgEl().textContent = '✓ Sauvegardé sur Nextcloud';
+      } catch (err) {
+        nextcloud = { ...nextcloud, lastBackupAt: new Date().toISOString(), lastBackupOk: false };
+        await repos.nextcloud.save(nextcloud);
+        render();
+        ncMsgEl().className = 'msg error';
+        ncMsgEl().textContent = `Échec : ${(err as Error).message}`;
+      }
+      return;
+    }
+
+    if ((e.target as HTMLElement).closest('[data-action="nc-restore"]')) {
+      const msgEl = ncMsgEl();
+      msgEl.className = 'msg';
+      msgEl.textContent = 'Récupération depuis Nextcloud…';
+      const password = await getNextcloudPassword();
+      if (!password || !nextcloud.url || !nextcloud.username) {
+        msgEl.className = 'msg error';
+        msgEl.textContent = 'Enregistre la config (URL, utilisateur, app password) avant de restaurer.';
+        return;
+      }
+      try {
+        const blob = await restoreFromNextcloud({ url: nextcloud.url, username: nextcloud.username }, password);
+        const preview = await runImport(repos, blob, false);
+        if (!preview.ok) {
+          msgEl.className = 'msg error';
+          msgEl.textContent = preview.error;
+          return;
+        }
+        ncRestorePreviewRaw = blob;
+        const previewCard = container.querySelector<HTMLDivElement>('#nc-restore-preview')!;
+        previewCard.style.display = 'block';
+        container.querySelector<HTMLDivElement>('#nc-restore-counts')!.innerHTML = preview.perKey
+          .map((k) => `<div><span>${k.key}</span><span>${k.note}</span></div>`)
+          .join('');
+        msgEl.className = '';
+        msgEl.textContent = '';
+      } catch (err) {
+        msgEl.className = 'msg error';
+        msgEl.textContent = `Échec : ${(err as Error).message}`;
+      }
+      return;
+    }
+
+    if ((e.target as HTMLElement).closest('[data-action="nc-restore-confirm"]')) {
+      const msgEl = ncMsgEl();
+      if (!ncRestorePreviewRaw) return;
+      const result = await runImport(repos, ncRestorePreviewRaw, true);
+      ncRestorePreviewRaw = null;
+      if (!result.ok) {
+        msgEl.className = 'msg error';
+        msgEl.textContent = result.error;
+        return;
+      }
+      // The import may have touched profile/theme/nextcloud — reload everything this
+      // screen holds in closure state before re-rendering, or the UI would show stale data.
+      profile = await repos.profile.load();
+      theme = await repos.theme.load();
+      applyTheme(theme);
+      nextcloud = await repos.nextcloud.load();
+      ncHasPassword = !!(await getNextcloudPassword());
+      render();
+      ncMsgEl().className = 'msg ok';
+      ncMsgEl().textContent = '✓ Restauration terminée';
+      return;
+    }
+
     const target = (e.target as HTMLElement).closest<HTMLElement>('[data-action="save-profile"]');
     if (!target) return;
     const msgEl = container.querySelector<HTMLDivElement>('#settings-msg')!;
@@ -153,6 +302,8 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
   (async () => {
     profile = await repos.profile.load();
     theme = await repos.theme.load();
+    nextcloud = await repos.nextcloud.load();
+    ncHasPassword = !!(await getNextcloudPassword());
     render();
   })();
 }

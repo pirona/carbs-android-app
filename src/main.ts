@@ -15,6 +15,9 @@ import { renderSettingsScreen, type SettingsScreenRepos } from './ui/screens/Set
 import { renderPhotoScanScreen, type PhotoScanScreenRepos } from './ui/screens/PhotoScanScreen';
 import { CapgoHealthConnectAdapter } from './integrations/healthConnect/CapgoHealthConnectAdapter';
 import { ThemeRepo } from './storage/repos/themeRepo';
+import { NextcloudRepo } from './storage/repos/nextcloudRepo';
+import { backupToNextcloud, getNextcloudPassword } from './integrations/nextcloudWebdav';
+import { buildExportBlob } from './migration/exportDump';
 import { applyTheme } from './ui/theme';
 
 const storage = new PreferencesStorageAdapter();
@@ -27,14 +30,30 @@ const habits = new HabitsRepo(storage);
 const foodLog = new FoodLogRepo(storage);
 const profile = new ProfileRepo(storage);
 const theme = new ThemeRepo(storage);
+const nextcloud = new NextcloudRepo(storage);
 
 // Applied as early as possible — a brief flash of the default theme before the stored
 // preference loads is an acceptable tradeoff for Preferences' async-only read API.
 theme.load().then(applyTheme);
 
+// Silent, fire-and-forget: a failed auto-backup must never block or interrupt app
+// startup. Errors just leave lastBackupOk=false, surfaced next time Settings is opened.
+nextcloud.load().then(async (settings) => {
+  if (settings.autoBackupMode !== 'launch') return;
+  const password = await getNextcloudPassword();
+  if (!password || !settings.url || !settings.username) return;
+  try {
+    const blob = await buildExportBlob(storage);
+    await backupToNextcloud({ url: settings.url, username: settings.username }, password, blob);
+    await nextcloud.save({ ...settings, lastBackupAt: new Date().toISOString(), lastBackupOk: true });
+  } catch {
+    await nextcloud.save({ ...settings, lastBackupAt: new Date().toISOString(), lastBackupOk: false });
+  }
+});
+
 const dayRepos: DayScreenRepos = { dayHistory, sport, foodLog, plaisir, habits, profile };
 const weekRepos: WeekScreenRepos = { dayHistory, carbHistory, plaisir, sport, profile };
-const settingsRepos: SettingsScreenRepos = { dayHistory, carbHistory, plaisir, sport, habits, foodLog, profile, theme };
+const settingsRepos: SettingsScreenRepos = { dayHistory, carbHistory, plaisir, sport, habits, foodLog, profile, theme, nextcloud };
 const photoScanRepos: PhotoScanScreenRepos = { habits, foodLog };
 
 // "Scan" sits right after "Jour" — photo entry is the primary adoption driver for this

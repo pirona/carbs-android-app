@@ -2,7 +2,8 @@
 import { Share } from '@capacitor/share';
 import { Clipboard } from '@capacitor/clipboard';
 import type { StorageAdapter } from '../../storage/StorageAdapter';
-import { dumpAllStorage } from '../../migration/exportDump';
+import { dumpAllStorage, buildExportBlob } from '../../migration/exportDump';
+import { getNextcloudPassword } from '../../integrations/nextcloudWebdav';
 
 // Manual backup/export screen (plan §Migration) — dumps every Preferences key to JSON,
 // shared via the OS share sheet or copied to the clipboard. No automatic cloud backup.
@@ -11,6 +12,10 @@ export function renderExportScreen(container: HTMLElement, storage: StorageAdapt
     <p class="hint">
       Sauvegarde manuelle de toutes les données de l'app en JSON — à partager/enregistrer
       où tu veux (fichier, email...). Pas de sauvegarde automatique.
+    </p>
+    <p class="hint" id="export-secret-warning" style="display:none">
+      ⚠️ Ce blob contient ton app password Nextcloud <strong>en clair</strong> (pour permettre
+      une restauration complète en un coup) — évite de le coller dans un canal non sécurisé.
     </p>
     <div class="card">
       <div class="counts" id="export-counts">Lecture…</div>
@@ -22,6 +27,7 @@ export function renderExportScreen(container: HTMLElement, storage: StorageAdapt
 
   const countsEl = container.querySelector<HTMLDivElement>('#export-counts')!;
   const msgEl = container.querySelector<HTMLDivElement>('#export-msg')!;
+  const warningEl = container.querySelector<HTMLParagraphElement>('#export-secret-warning')!;
   const shareBtn = container.querySelector<HTMLButtonElement>('#export-share')!;
   const copyBtn = container.querySelector<HTMLButtonElement>('#export-copy')!;
 
@@ -29,7 +35,10 @@ export function renderExportScreen(container: HTMLElement, storage: StorageAdapt
 
   async function load() {
     const entries = await dumpAllStorage(storage);
-    blob = JSON.stringify(Object.fromEntries(entries.map((e) => [e.key, e.value])));
+    const nextcloudPassword = await getNextcloudPassword();
+    warningEl.style.display = nextcloudPassword ? 'block' : 'none';
+    blob = await buildExportBlob(storage);
+
     if (entries.length === 0) {
       countsEl.textContent = 'Rien à exporter pour le moment.';
       return;

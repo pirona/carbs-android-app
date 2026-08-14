@@ -12,6 +12,8 @@ import { HabitsRepo, type HabitSortMode } from '../storage/repos/habitsRepo';
 import { FoodLogRepo, type FoodLog } from '../storage/repos/foodLogRepo';
 import { ProfileRepo } from '../storage/repos/profileRepo';
 import { ThemeRepo, type ThemeSettings } from '../storage/repos/themeRepo';
+import { NextcloudRepo, type NextcloudSettings } from '../storage/repos/nextcloudRepo';
+import { setNextcloudPassword } from '../integrations/nextcloudWebdav';
 import { formatDateKey } from '../core/calc/date';
 import { mergeByKey, mergeByUpdatedAt, mergeRecord } from './importMerge';
 import type { PlaisirOverrides } from '../core/types';
@@ -25,6 +27,7 @@ export interface ImportRepos {
   foodLog: FoodLogRepo;
   profile: ProfileRepo;
   theme: ThemeRepo;
+  nextcloud: NextcloudRepo;
 }
 
 export interface ImportKeyResult {
@@ -187,6 +190,23 @@ export async function runImport(
     perKey.push({ key: 'theme_settings', recognized: true, note: 'adopté' });
   } else {
     perKey.push({ key: 'theme_settings', recognized: false, note: 'absent' });
+  }
+
+  // nextcloud_settings — same policy: single preference blob, always adopted when present.
+  if (parsed.nextcloud_settings && typeof parsed.nextcloud_settings === 'object' && !isArray(parsed.nextcloud_settings)) {
+    if (apply) await repos.nextcloud.save(parsed.nextcloud_settings as NextcloudSettings);
+    perKey.push({ key: 'nextcloud_settings', recognized: true, note: 'adopté' });
+  } else {
+    perKey.push({ key: 'nextcloud_settings', recognized: false, note: 'absent' });
+  }
+
+  // nextcloud_app_password — lives in secure storage, not Preferences, but travels in the
+  // same export/import blob at the user's explicit request (see ExportScreen's warning).
+  if (typeof parsed.nextcloud_app_password === 'string' && parsed.nextcloud_app_password) {
+    if (apply) await setNextcloudPassword(parsed.nextcloud_app_password);
+    perKey.push({ key: 'nextcloud_app_password', recognized: true, note: 'adopté' });
+  } else {
+    perKey.push({ key: 'nextcloud_app_password', recognized: false, note: 'absent' });
   }
 
   return { ok: true, perKey };
