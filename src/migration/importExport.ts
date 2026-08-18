@@ -10,6 +10,7 @@ import { PlaisirRepo } from '../storage/repos/plaisirRepo';
 import { SportRepo } from '../storage/repos/sportRepo';
 import { HabitsRepo, type HabitSortMode } from '../storage/repos/habitsRepo';
 import { FoodLogRepo, type FoodLog } from '../storage/repos/foodLogRepo';
+import { FoodLogHistoryRepo, type FoodLogHistoryEntry } from '../storage/repos/foodLogHistoryRepo';
 import { ProfileRepo } from '../storage/repos/profileRepo';
 import { ThemeRepo, type ThemeSettings } from '../storage/repos/themeRepo';
 import { NextcloudRepo, type NextcloudSettings } from '../storage/repos/nextcloudRepo';
@@ -25,6 +26,7 @@ export interface ImportRepos {
   sport: SportRepo;
   habits: HabitsRepo;
   foodLog: FoodLogRepo;
+  foodLogHistory: FoodLogHistoryRepo;
   profile: ProfileRepo;
   theme: ThemeRepo;
   nextcloud: NextcloudRepo;
@@ -165,6 +167,19 @@ export async function runImport(
     }
   } else {
     perKey.push({ key: 'food_log_today', recognized: false, note: 'absent ou format inattendu' });
+  }
+
+  // food_log_history — same policy as day_history: union by date, existing wins, historical
+  // fact that must never regress from re-importing an older export.
+  if (isArray(parsed.food_log_history)) {
+    const existing = await repos.foodLogHistory.load();
+    const incoming = parsed.food_log_history as FoodLogHistoryEntry[];
+    const { merged, added, skipped } = mergeByKey(existing, incoming, (e) => e.date);
+    merged.sort((a, b) => (a.date < b.date ? 1 : -1));
+    if (apply) await repos.foodLogHistory.save(merged);
+    perKey.push({ key: 'food_log_history', recognized: true, note: `${added} jour(s) ajouté(s), ${skipped} déjà connu(s)` });
+  } else {
+    perKey.push({ key: 'food_log_history', recognized: false, note: 'absent ou format inattendu' });
   }
 
   // food_habits_sort_mode — a UI preference, low-stakes, always adopted when present.

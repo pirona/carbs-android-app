@@ -7,6 +7,7 @@ import { PlaisirRepo } from './storage/repos/plaisirRepo';
 import { SportRepo } from './storage/repos/sportRepo';
 import { HabitsRepo } from './storage/repos/habitsRepo';
 import { FoodLogRepo } from './storage/repos/foodLogRepo';
+import { FoodLogHistoryRepo } from './storage/repos/foodLogHistoryRepo';
 import { ProfileRepo } from './storage/repos/profileRepo';
 import { renderDayScreen, type DayScreenRepos } from './ui/screens/DayScreen';
 import { renderProgressScreen, type ProgressScreenRepos } from './ui/screens/ProgressScreen';
@@ -14,13 +15,14 @@ import { renderWeekScreen, type WeekScreenRepos } from './ui/screens/WeekScreen'
 import { renderHabitsScreen } from './ui/screens/HabitsScreen';
 import { renderSettingsScreen, type SettingsScreenRepos } from './ui/screens/SettingsScreen';
 import { renderPhotoScanScreen, type PhotoScanScreenRepos } from './ui/screens/PhotoScanScreen';
+import { renderConseilsScreen, type ConseilsScreenRepos } from './ui/screens/ConseilsScreen';
 import { CapgoHealthConnectAdapter } from './integrations/healthConnect/CapgoHealthConnectAdapter';
 import { ThemeRepo } from './storage/repos/themeRepo';
 import { NextcloudRepo } from './storage/repos/nextcloudRepo';
 import { backupToNextcloud, getNextcloudPassword } from './integrations/nextcloudWebdav';
 import { buildExportBlob } from './migration/exportDump';
 import { applyTheme } from './ui/theme';
-import { iconHome, iconTrendingUp, iconPhotoCamera, iconCalendarMonth, iconRestaurantMenu, iconSettings } from './ui/icons';
+import { iconHome, iconTrendingUp, iconPhotoCamera, iconCalendarMonth, iconRestaurantMenu, iconSettings, iconLightbulb } from './ui/icons';
 
 const storage = new PreferencesStorageAdapter();
 const healthConnect = new CapgoHealthConnectAdapter();
@@ -30,6 +32,7 @@ const plaisir = new PlaisirRepo(storage);
 const sport = new SportRepo(storage);
 const habits = new HabitsRepo(storage);
 const foodLog = new FoodLogRepo(storage);
+const foodLogHistory = new FoodLogHistoryRepo(storage);
 const profile = new ProfileRepo(storage);
 const theme = new ThemeRepo(storage);
 const nextcloud = new NextcloudRepo(storage);
@@ -53,13 +56,14 @@ nextcloud.load().then(async (settings) => {
   }
 });
 
-const dayRepos: DayScreenRepos = { dayHistory, sport, foodLog, plaisir, habits, profile };
+const dayRepos: DayScreenRepos = { dayHistory, sport, foodLog, foodLogHistory, plaisir, habits, profile };
 const progressRepos: ProgressScreenRepos = { dayHistory, carbHistory, plaisir, sport, profile };
 const weekRepos: WeekScreenRepos = { dayHistory, plaisir, sport, profile };
-const settingsRepos: SettingsScreenRepos = { dayHistory, carbHistory, plaisir, sport, habits, foodLog, profile, theme, nextcloud };
+const settingsRepos: SettingsScreenRepos = { dayHistory, carbHistory, plaisir, sport, habits, foodLog, foodLogHistory, profile, theme, nextcloud };
 const photoScanRepos: PhotoScanScreenRepos = { habits, foodLog };
+const conseilsRepos: ConseilsScreenRepos = { dayHistory, foodLogHistory, profile };
 
-type TabId = 'day' | 'progress' | 'scan' | 'week' | 'habits' | 'settings';
+type TabId = 'day' | 'progress' | 'scan' | 'week' | 'habits' | 'settings' | 'conseils';
 interface TabDef {
   id: TabId;
   label: string;
@@ -79,9 +83,13 @@ const PRIMARY_TABS: (TabDef & { icon: () => string })[] = [
   { id: 'habits', icon: iconRestaurantMenu, label: 'Habitudes', render: (el) => renderHabitsScreen(el, { habits }) },
 ];
 
+// Conseils shares the same "not a several-times-a-day destination" reasoning as Réglages (see
+// PRIMARY_TABS comment above) — a once-in-a-while check-in after a fully-logged day, not a
+// recurring tab worth the 6th bottom-nav slot M3 doesn't recommend.
+const CONSEILS_TAB: TabDef = { id: 'conseils', label: 'Conseils', render: (el) => renderConseilsScreen(el, conseilsRepos) };
 const SETTINGS_TAB: TabDef = { id: 'settings', label: 'Réglages', render: (el) => renderSettingsScreen(el, settingsRepos, storage) };
 
-const ALL_TABS: TabDef[] = [...PRIMARY_TABS, SETTINGS_TAB];
+const ALL_TABS: TabDef[] = [...PRIMARY_TABS, CONSEILS_TAB, SETTINGS_TAB];
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
@@ -89,7 +97,8 @@ app.innerHTML = `
     <div id="topbar-inner">
       <img id="topbar-logo" src="/logo-taco-chick.png" alt="">
       <h1 id="topbar-title"></h1>
-      <button id="topbar-settings" data-tab="settings" aria-label="Réglages">${iconSettings()}</button>
+      <button class="topbar-icon" id="topbar-conseils" data-tab="conseils" aria-label="Conseils">${iconLightbulb()}</button>
+      <button class="topbar-icon" id="topbar-settings" data-tab="settings" aria-label="Réglages">${iconSettings()}</button>
     </div>
   </header>
   <div id="screen"></div>
@@ -106,12 +115,14 @@ app.innerHTML = `
 
 let screen = app.querySelector<HTMLDivElement>('#screen')!;
 const topbarTitle = app.querySelector<HTMLHeadingElement>('#topbar-title')!;
+const topbarConseils = app.querySelector<HTMLButtonElement>('#topbar-conseils')!;
 const topbarSettings = app.querySelector<HTMLButtonElement>('#topbar-settings')!;
 const navItems = app.querySelectorAll<HTMLButtonElement>('#tabs [data-tab]');
 
 function showTab(id: TabId) {
   const tab = ALL_TABS.find((t) => t.id === id)!;
   navItems.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === id));
+  topbarConseils.classList.toggle('active', id === 'conseils');
   topbarSettings.classList.toggle('active', id === 'settings');
   topbarTitle.textContent = tab.label;
   // Each screen module attaches its own click/change listeners directly on the container
@@ -125,6 +136,7 @@ function showTab(id: TabId) {
 }
 
 navItems.forEach((btn) => btn.addEventListener('click', () => showTab(btn.dataset.tab as TabId)));
+topbarConseils.addEventListener('click', () => showTab('conseils'));
 topbarSettings.addEventListener('click', () => showTab('settings'));
 
 showTab('day');

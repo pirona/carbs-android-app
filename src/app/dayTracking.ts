@@ -12,12 +12,14 @@ import { formatDateKey } from '../core/calc/date';
 import type { DayHistoryRepo } from '../storage/repos/dayHistoryRepo';
 import type { SportRepo } from '../storage/repos/sportRepo';
 import type { FoodLogRepo } from '../storage/repos/foodLogRepo';
+import type { FoodLogHistoryRepo } from '../storage/repos/foodLogHistoryRepo';
 import type { PlaisirRepo } from '../storage/repos/plaisirRepo';
 
 export interface DayTrackingRepos {
   dayHistory: DayHistoryRepo;
   sport: SportRepo;
   foodLog: FoodLogRepo;
+  foodLogHistory: FoodLogHistoryRepo;
   plaisir: PlaisirRepo;
 }
 
@@ -52,6 +54,18 @@ async function archiveIfDateRolledOver(repos: DayTrackingRepos, todayKey: string
     }
   }
   await repos.dayHistory.saveHistory([last, ...history]);
+
+  // food_log_today only ever tracked the day's aggregate totals in day_history above — the
+  // actual line items were about to be silently discarded (loadToday() would just start
+  // returning a fresh in-memory log for the new date without this). Archive them into
+  // food_log_history before that happens, then reset the live key: previously it kept
+  // yesterday's raw entries on disk in a stale, ambient state until the next save overwrote
+  // them, whenever that happened to occur.
+  const rawLog = await repos.foodLog.loadRaw();
+  if (rawLog && rawLog.date === last.date) {
+    await repos.foodLogHistory.archiveDay(last.date, rawLog.entries);
+  }
+  await repos.foodLog.saveToday({ date: todayKey, entries: [] });
 }
 
 export async function refreshDaySnapshot(

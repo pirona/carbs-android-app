@@ -576,7 +576,10 @@ label.field-label {
   white-space: nowrap;
 }
 
-#topbar-settings {
+/* Shared by every icon button in the top app bar (Conseils, Réglages) — see main.ts, which
+   doesn't belong to the 5-item bottom nav (M3's recommended max) because it's a once-in-a-while
+   check-in rather than a several-times-a-day destination, same reasoning as Réglages. */
+.topbar-icon {
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -591,14 +594,14 @@ label.field-label {
   transition: background 0.2s ease, color 0.2s ease;
 }
 
-#topbar-settings.active {
+.topbar-icon.active {
   background: var(--secondary-container);
   color: var(--on-secondary-container);
 }
 
 #screen {
   padding: 14px;
-  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  padding-bottom: calc(112px + env(safe-area-inset-bottom));
 }
 
 #tabs {
@@ -609,8 +612,12 @@ label.field-label {
   z-index: 10;
   display: flex;
   justify-content: space-around;
-  height: 80px;
-  padding-bottom: env(safe-area-inset-bottom);
+  height: 96px;
+  /* Extra 10px on top of the system inset, not just the inset alone — Samsung's 3-button/gesture
+     nav bar has been observed to overlap the last few px of content even when the WebView
+     reports a safe-area-inset-bottom that should have cleared it. This fixed buffer is a real
+     margin against that under-report, not decorative spacing. */
+  padding-bottom: calc(env(safe-area-inset-bottom) + 10px);
   background: var(--surface);
 }
 
@@ -625,7 +632,7 @@ label.field-label {
      this WebView for a <button> (a known form-control quirk: buttons often ignore percentage
      height/stretch sizing). Without it the button collapsed to ~32px content height regardless
      of #tabs' own height, spilling the icon above the button's box. Keep in sync with #tabs. */
-  height: 80px;
+  height: 96px;
   border: none;
   background: none;
   color: var(--text-muted);

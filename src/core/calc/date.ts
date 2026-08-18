@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import type { MealSlot } from '../types';
 
 // Local "YYYY-MM-DD" key, matches the construction used throughout carb-cycling.html
 // (e.g. :2021, :2083) — NOT the same as an ISO/UTC date string.
@@ -16,4 +17,16 @@ export function getISOWeek(d: Date): number {
   const year = date.getUTCFullYear();
   const y0 = new Date(Date.UTC(year, 0, 1));
   return Math.ceil(((date.getTime() - y0.getTime()) / 86400000 + 1) / 7);
+}
+
+// Default meal-slot suggestion from the clock, used to prefill (never force) the explicit
+// selector shown when logging food — windows chosen by the user (5h-11h petit-déj,
+// 11h-15h déjeuner, 18h-22h30 dîner, everything else — late-night/mid-afternoon snacks — falls
+// to "collation"/hors-repas).
+export function guessMealSlot(d: Date): MealSlot {
+  const h = d.getHours() + d.getMinutes() / 60;
+  if (h >= 5 && h < 11) return 'petit_dej';
+  if (h >= 11 && h < 15) return 'dejeuner';
+  if (h >= 18 && h < 22.5) return 'diner';
+  return 'collation';
 }

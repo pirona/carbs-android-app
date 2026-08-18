@@ -1,0 +1,96 @@
+{
+  "name": "Carbs — Carb Advice (Mistral)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "carb-advice",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-carb-advice",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "carb-advice",
+      "notes": "POST body = CarbAdviceRequest (see src/integrations/n8nCarbAdvice.ts in carbs-android-app) — a single day's structured nutrition data. No free text from the client, so nothing here needs sanitizing before it reaches the prompt."
+    },
+    {
+      "parameters": {
+        "jsCode": "// The client already computed every number (targets, totals, meal groups) — this\n// node's only job is to package that JSON into a rigid system prompt + a user message,\n// never to recompute or reinterpret the nutrition data itself.\nconst payload = $json.body;\n\nconst systemPrompt = `Tu es un assistant nutrition qui donne des conseils de déficit calorique fondés EXCLUSIVEMENT sur les recommandations d'organismes de santé publique reconnus scientifiquement :\n- France : ANSES (Agence nationale de sécurité sanitaire de l'alimentation, de l'environnement et du travail), HAS (Haute Autorité de Santé), Santé publique France / PNNS\n- Europe : EFSA (European Food Safety Authority)\n- Mondial : OMS / WHO (Organisation mondiale de la Santé)\n\nRÈGLES STRICTES, à respecter sans exception :\n1. Ne cite JAMAIS un organisme ou une recommandation dont tu n'es pas sûr — en cas de doute sur l'attribution exacte, formule le conseil comme un principe nutritionnel général bien établi, sans l'attribuer à un organisme précis, plutôt que d'inventer ou d'approximer une référence.\n2. N'invente aucun chiffre précis, aucune étude, aucun nom de rapport. N'utilise que des ordres de grandeur et principes larges et consensuels (ex: \"un déficit de 500 à 750 kcal/jour est communément recommandé pour une perte de poids progressive et durable\").\n3. Ne donne aucun conseil médical individualisé (pas de diagnostic, pas de recommandation qui se substituerait à un avis médical) — reste sur des principes nutritionnels généraux applicables à un adulte en bonne santé.\n4. Réponds en français, tutoiement, ton direct et concis (4 à 8 phrases maximum). Pas de préambule ni de disclaimer générique.\n5. Les données fournies reflètent le programme de carb cycling de l'utilisateur (jours HIGH/MEDIUM/LOW/PLAISIR avec des cibles de glucides différentes selon le type de jour, glucides jamais sous 130g/jour). Commente explicitement si l'apport réel du jour (total et par repas) est cohérent avec la cible de ce type de jour précis, pas seulement le déficit calorique global.\n6. Termine par la liste des organismes dont tu t'es réellement inspiré pour CETTE réponse précise (pas une liste générique donnée par défaut) dans le champ \"sources\" — liste vide si le conseil ne repose que sur des principes généraux non attribuables à un organisme précis.\n\nRéponds UNIQUEMENT en JSON strict, sans aucun texte hors JSON, au format exact :\n{\"advice\": \"...\", \"sources\": [\"...\"]}`;\n\nconst userPrompt = `Voici les données de la journée à analyser (déjà calculées côté application, ne recalcule aucun total ni aucune cible toi-même) :\\n${JSON.stringify(payload, null, 2)}\\n\\nDonne un conseil de déficit calorique pour cette journée précise, en tenant compte du type de jour (carb cycling) et de la répartition par repas (petit_dej / dejeuner / diner / collation = hors-repas).`;\n\nreturn [{ json: { systemPrompt, userPrompt } }];"
+      },
+      "id": "code-build-prompt",
+      "name": "Build Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.mistral.ai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"mistral-large-latest\", temperature: 0.3, response_format: { type: \"json_object\" }, messages: [ { role: \"system\", content: $json.systemPrompt }, { role: \"user\", content: $json.userPrompt } ] }) }}",
+        "options": {}
+      },
+      "id": "http-call-mistral",
+      "name": "Call Mistral",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PLACEHOLDER",
+          "name": "Mistral API"
+        }
+      },
+      "notes": "Re-link the httpHeaderAuth credential to the same 'Mistral API' credential already used by food-parse/food-vision after import — the id above is a placeholder, n8n will prompt for it. temperature kept low (0.3) and response_format forced to json_object so the rigid system prompt's output stays parseable and doesn't drift into free text."
+    },
+    {
+      "parameters": {
+        "jsCode": "// If Call Mistral failed (auth, quota, network — onError:continueRegularOutput turns\n// that into { error: ... } with no .choices), this throws inside the try and falls to the\n// generic error below rather than crashing the workflow.\ntry {\n  const content = $json.choices[0].message.content;\n  const parsed = JSON.parse(content);\n  if (typeof parsed.advice !== 'string' || !parsed.advice.trim()) {\n    return [{ json: { error: \"Réponse IA vide — réessaie.\" } }];\n  }\n  return [{ json: { advice: parsed.advice, sources: Array.isArray(parsed.sources) ? parsed.sources : [] } }];\n} catch (e) {\n  return [{ json: { error: \"Conseil indisponible pour le moment — réessaie plus tard.\" } }];\n}"
+      },
+      "id": "code-parse-response",
+      "name": "Parse Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [880, 0]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Build Prompt", "type": "main", "index": 0 }]]
+    },
+    "Build Prompt": {
+      "main": [[{ "node": "Call Mistral", "type": "main", "index": 0 }]]
+    },
+    "Call Mistral": {
+      "main": [[{ "node": "Parse Response", "type": "main", "index": 0 }]]
+    },
+    "Parse Response": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none"
+  }
+}

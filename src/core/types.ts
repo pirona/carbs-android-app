@@ -58,6 +58,17 @@ export const PLAISIR_LEVELS: Record<PlaisirLevel, PlaisirLevelInfo> = {
 // carb-cycling.html:425
 export const PLAISIR_CYCLE: (PlaisirLevel | null)[] = [null, 'leger', 'moyen', 'lourd'];
 
+// A logged food entry's meal — 'collation' also covers anything eaten outside the three main
+// meals (the "hors-repas" bucket the Conseils screen groups those under).
+export type MealSlot = 'petit_dej' | 'dejeuner' | 'diner' | 'collation';
+export const MEAL_SLOT_ORDER: MealSlot[] = ['petit_dej', 'dejeuner', 'diner', 'collation'];
+export const MEAL_SLOT_LABEL: Record<MealSlot, string> = {
+  petit_dej: '☀️ Petit-déjeuner',
+  dejeuner: '🍽️ Déjeuner',
+  diner: '🌙 Dîner',
+  collation: '🍎 Hors-repas',
+};
+
 // carb-cycling.html:450-453
 export const TDEE_BONUS = { high: 1400, medium: 750, low: 200 } as const;
 export const FAT_G = { high: 75, medium: 80, low: 45 } as const;
@@ -114,7 +125,7 @@ export interface Habit {
   portion_g: number;
   per100: Per100;
   day_type_tag: DayType | null;
-  meal_slot: 'petit_dej' | 'dejeuner' | 'diner' | null;
+  meal_slot: MealSlot | null;
   updated_at: number;
   // Phase 6 — plats composés issus du scan photo, voir plan §Phase 6/7.5
   components?: { label: string; per100: Per100; grams: number }[];
@@ -133,6 +144,9 @@ export interface LogEntry {
   carb_g: number;
   source: Habit['source'];
   updated_at: number;
+  // Which meal this was eaten at — required going forward (see MealSlot) so a past day's
+  // entries can be grouped by meal + hors-repas on the Conseils screen.
+  meal_slot: MealSlot;
   // Phase 6 — regroupe les entrées issues d'une même photo
   photo_group_id?: string | null;
 }

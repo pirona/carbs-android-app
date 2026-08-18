@@ -36,4 +36,18 @@ export class FoodLogRepo {
   async saveToday(log: FoodLog): Promise<void> {
     await this.storage.set(FOOD_LOG_TODAY_KEY, JSON.stringify(log));
   }
+
+  // Whatever is actually stored under food_log_today, regardless of its date — unlike
+  // loadToday(), which silently swaps in a fresh in-memory log once the date has rolled over.
+  // Used only by the day-rollover archiving in dayTracking.ts, which needs the previous day's
+  // real entries before they'd otherwise be discarded.
+  async loadRaw(): Promise<FoodLog | null> {
+    const raw = await this.storage.get(FOOD_LOG_TODAY_KEY);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as FoodLog;
+    } catch {
+      return null;
+    }
+  }
 }

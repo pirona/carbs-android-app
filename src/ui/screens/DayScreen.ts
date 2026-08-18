@@ -15,12 +15,15 @@ import { type OffProduct } from '../../integrations/openFoodFacts';
 import {
   type FoodEntryPrefill,
   renderFoodConfirmStepHtml,
+  renderMealSlotSelectHtml,
   updateFoodEntryTotalPreview,
   handleFoodEntryKcalGuardInput,
   searchOffProducts,
   scanBarcodeAndLookup,
   interpretFoodTextWithAI,
 } from '../forms/foodEntryForm';
+import { guessMealSlot } from '../../core/calc/date';
+import type { MealSlot } from '../../core/types';
 import { escapeHtml, fmt1, attachLongPress } from '../util';
 import { iconAdd, iconRestaurant } from '../icons';
 
@@ -183,6 +186,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
           <button type="button" class="btn" data-action="log-portion-multiply" data-factor="3">×3</button>
         </div>`,
       afterFieldsHtml: `
+        ${renderMealSlotSelectHtml('log-f-mealslot', guessMealSlot(now()))}
         <label class="checkbox-label">
           <input type="checkbox" id="log-f-save-habit" ${f.saveAsHabit ? 'checked' : ''}>
           💾 Sauver aussi en habitude
@@ -375,6 +379,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
           carb_g: m.carb_g,
           source: h.source,
           updated_at: Date.now(),
+          meal_slot: h.meal_slot ?? guessMealSlot(now()),
         });
         await repos.foodLog.saveToday(log);
       });
@@ -513,6 +518,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
         carb_g: parseFloat(container.querySelector<HTMLInputElement>('#log-f-carb')!.value) || 0,
       };
       const saveAsHabit = container.querySelector<HTMLInputElement>('#log-f-save-habit')?.checked ?? false;
+      const mealSlot = (container.querySelector<HTMLSelectElement>('#log-f-mealslot')?.value || guessMealSlot(now())) as MealSlot;
       const source = logForm.prefill.source;
       const offCode = logForm.prefill.off_code;
       await withRefresh(async () => {
@@ -530,6 +536,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
           carb_g: m.carb_g,
           source,
           updated_at: Date.now(),
+          meal_slot: mealSlot,
         });
         await repos.foodLog.saveToday(log);
         if (saveAsHabit) {
@@ -548,8 +555,14 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
           await repos.habits.save(newHabits);
           habits = newHabits;
         }
+        // Cleared here, inside the callback withRefresh awaits before its own render() —
+        // clearing it after withRefresh() returns is one render() too late: that call already
+        // painted the confirm form (from the untouched, stale `prefill` object the form
+        // started with, since its inputs are uncontrolled) instead of the "+ Logger un
+        // aliment" button, and nothing re-renders afterward to correct it. Confirmed on
+        // device: the form was left stuck open showing reset/default values post-save.
+        logForm = null;
       });
-      logForm = null;
       return;
     }
   });

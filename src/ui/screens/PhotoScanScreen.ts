@@ -6,7 +6,7 @@
 // logger" tap. The photo (base64) is held only in a local closure var during the capture
 // action and is never assigned anywhere else — nothing persists it, on-device or server-side
 // (see n8n_food_vision_workflow.json's saveDataSuccessExecution:"none").
-import type { LogEntry } from '../../core/types';
+import type { LogEntry, MealSlot } from '../../core/types';
 import type { HabitsRepo } from '../../storage/repos/habitsRepo';
 import type { FoodLogRepo } from '../../storage/repos/foodLogRepo';
 import { capturePlatePhoto } from '../../integrations/camera';
@@ -15,7 +15,8 @@ import { lookupOFF, scanBarcode } from '../../integrations/barcodeScan';
 import { searchOFF } from '../../integrations/openFoodFacts';
 import { componentToRow, habitToRows, tryRecognizeHabit, type RowSource, type ScanRow } from '../../app/photoScanMatch';
 import { computeFoodMacros, kcalFromMacros } from '../../core/calc/food';
-import { renderPer100FieldsHtml } from '../forms/foodEntryForm';
+import { guessMealSlot } from '../../core/calc/date';
+import { renderPer100FieldsHtml, renderMealSlotSelectHtml } from '../forms/foodEntryForm';
 import { escapeHtml, fmt1 } from '../util';
 
 export interface PhotoScanScreenRepos {
@@ -46,6 +47,12 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
   let recognizedHabitLabel: string | null = null;
   let errorMsg: string | null = null;
   let saveAsHabit = false;
+  // One meal for the whole scanned group — a single photo is one plate/meal, not a mix.
+  // Re-guessed fresh at the start of each scan (see startScan/startBarcodeScan), then held in
+  // state (unlike the per100 fields, which are read straight from the DOM) since this screen's
+  // render() is called repeatedly while reviewing (toggle/remove row, pick a candidate...) and
+  // would otherwise silently reset the user's choice back to the guessed default each time.
+  let mealSlot: MealSlot = guessMealSlot(new Date());
   // Which flow to relaunch when "Réessayer" is tapped from the error state — the two
   // scan modes need different retry actions, so a single hardcoded button can't know.
   let lastMode: 'photo' | 'barcode' | null = null;
@@ -153,6 +160,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
         </div>
       </div>
       <div class="card">
+        ${renderMealSlotSelectHtml('scan-mealslot', mealSlot)}
         <label class="checkbox-label">
           <input type="checkbox" id="scan-save-habit" ${saveAsHabit ? 'checked' : ''}>
           💾 Sauver ce plat comme habitude (reconnaissance rapide la prochaine fois)
@@ -201,6 +209,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
       return;
     }
     const photo = capture.photo;
+    mealSlot = guessMealSlot(new Date());
     state = 'analyzing';
     render();
     try {
@@ -236,6 +245,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
       render();
       return;
     }
+    mealSlot = guessMealSlot(new Date());
     state = 'analyzing';
     render();
     const result = await lookupOFF(scan.code);
@@ -290,6 +300,8 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
     const target = e.target as HTMLElement;
     if (target.id === 'scan-save-habit') {
       saveAsHabit = (target as HTMLInputElement).checked;
+    } else if (target.id === 'scan-mealslot') {
+      mealSlot = (target as HTMLSelectElement).value as MealSlot;
     }
   });
 
@@ -458,6 +470,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
           carb_g: m.carb_g,
           source: row.source === 'habit' ? 'manual' : (row.source as LogEntry['source']),
           updated_at: Date.now(),
+          meal_slot: mealSlot,
           photo_group_id: photoGroupId,
         };
       });

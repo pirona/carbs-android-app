@@ -19,6 +19,7 @@ const ENTRY: LogEntry = {
   carb_g: 21,
   source: 'manual',
   updated_at: Date.now(),
+  meal_slot: 'collation',
 };
 
 describe('FoodLogRepo', () => {
@@ -39,5 +40,12 @@ describe('FoodLogRepo', () => {
     expect(await repo.loadToday(TODAY)).toEqual({ date: '2026-08-12', entries: [] });
     // sanity: the same stale log, read as "today" on the day it was written, round-trips
     expect(await repo.loadToday(YESTERDAY)).toEqual({ date: '2026-08-11', entries: [ENTRY] });
+  });
+
+  it('loadRaw returns null when nothing is stored, and the stored log regardless of its date otherwise', async () => {
+    const repo = new FoodLogRepo(new InMemoryStorageAdapter());
+    expect(await repo.loadRaw()).toBeNull();
+    await repo.saveToday({ date: '2026-08-11', entries: [ENTRY] });
+    expect(await repo.loadRaw()).toEqual({ date: '2026-08-11', entries: [ENTRY] });
   });
 });

@@ -8,12 +8,14 @@ import { type OffProduct } from '../../integrations/openFoodFacts';
 import {
   type FoodEntryPrefill,
   renderFoodConfirmStepHtml,
+  renderMealSlotSelectHtml,
   handleFoodEntryKcalGuardInput,
   searchOffProducts,
   scanBarcodeAndLookup,
   interpretFoodTextWithAI,
 } from '../forms/foodEntryForm';
 import { computeFoodMacros } from '../../core/calc/food';
+import { MEAL_SLOT_LABEL } from '../../core/types';
 import { escapeHtml, fmt1, attachLongPress } from '../util';
 
 interface FormState {
@@ -31,11 +33,6 @@ interface FormState {
 }
 
 const DAYTYPE_LABEL: Record<string, string> = { high: 'HIGH', medium: 'MEDIUM', low: 'LOW' };
-const MEALSLOT_LABEL: Record<string, string> = {
-  petit_dej: '☀️ Petit-déj',
-  dejeuner: '🍽️ Déjeuner',
-  diner: '🌙 Dîner',
-};
 
 function uid(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -59,7 +56,7 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
 
   function habitRow(h: Habit): string {
     const m = computeFoodMacros(h.per100, h.portion_g);
-    const tags = [DAYTYPE_LABEL[h.day_type_tag ?? ''], MEALSLOT_LABEL[h.meal_slot ?? '']]
+    const tags = [DAYTYPE_LABEL[h.day_type_tag ?? ''], h.meal_slot ? MEAL_SLOT_LABEL[h.meal_slot] : null]
       .filter(Boolean)
       .join(' · ');
     return `
@@ -124,13 +121,7 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
           <option value="medium" ${p.day_type_tag === 'medium' ? 'selected' : ''}>MEDIUM</option>
           <option value="low" ${p.day_type_tag === 'low' ? 'selected' : ''}>LOW</option>
         </select>
-        <label class="field-label">Repas (optionnel)</label>
-        <select id="f-mealslot">
-          <option value="" ${!p.meal_slot ? 'selected' : ''}>Non classé</option>
-          <option value="petit_dej" ${p.meal_slot === 'petit_dej' ? 'selected' : ''}>Petit-déjeuner</option>
-          <option value="dejeuner" ${p.meal_slot === 'dejeuner' ? 'selected' : ''}>Déjeuner</option>
-          <option value="diner" ${p.meal_slot === 'diner' ? 'selected' : ''}>Dîner</option>
-        </select>`,
+        ${renderMealSlotSelectHtml('f-mealslot', p.meal_slot, { allowUnset: true })}`,
     });
   }
 

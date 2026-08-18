@@ -5,6 +5,7 @@ import { InMemoryStorageAdapter } from '../../storage/InMemoryStorageAdapter';
 import { DayHistoryRepo } from '../../storage/repos/dayHistoryRepo';
 import { SportRepo } from '../../storage/repos/sportRepo';
 import { FoodLogRepo } from '../../storage/repos/foodLogRepo';
+import { FoodLogHistoryRepo } from '../../storage/repos/foodLogHistoryRepo';
 import { PlaisirRepo } from '../../storage/repos/plaisirRepo';
 import { DEFAULT_PROFILE } from '../../storage/repos/profileRepo';
 import type { DayEntry, LogEntry } from '../../core/types';
@@ -15,6 +16,7 @@ function makeRepos(): DayTrackingRepos {
     dayHistory: new DayHistoryRepo(storage),
     sport: new SportRepo(storage),
     foodLog: new FoodLogRepo(storage),
+    foodLogHistory: new FoodLogHistoryRepo(storage),
     plaisir: new PlaisirRepo(storage),
   };
 }
@@ -48,6 +50,7 @@ describe('refreshDaySnapshot', () => {
       carb_g: 42,
       source: 'manual',
       updated_at: Date.now(),
+      meal_slot: 'dejeuner',
     };
     await repos.foodLog.saveToday({ date: '2026-08-12', entries: [entry] });
 
@@ -145,6 +148,74 @@ describe('refreshDaySnapshot', () => {
     const history = await repos.dayHistory.loadHistory();
     expect(history[0].sport_kcal).toBe(400);
     expect(history[0].burned_today).toBe(700); // 300 step_kcal + 400 sport_kcal
+  });
+
+  it('archives the previous day\'s food log entries into food_log_history and resets food_log_today', async () => {
+    const repos = makeRepos();
+    const yesterday: DayEntry = {
+      date: '2026-08-11',
+      dayType: 'medium',
+      weight_kg: 91,
+      steps: null,
+      step_kcal: null,
+      sport_kcal: null,
+      active_cal: null,
+      total_cal: null,
+      burned_today: null,
+      food_kcal: 400,
+      food_protein_g: 20,
+      food_fat_g: 10,
+      food_carb_g: 40,
+    };
+    await repos.dayHistory.saveCurrentDay(yesterday);
+    const entry: LogEntry = {
+      entry_id: 'e1',
+      habit_id: null,
+      label: 'Yaourt',
+      portion_g: 125,
+      per100: { kcal: 60, protein_g: 4, fat_g: 2, carb_g: 6 },
+      kcal: 75,
+      protein_g: 5,
+      fat_g: 2.5,
+      carb_g: 7.5,
+      source: 'manual',
+      updated_at: Date.now(),
+      meal_slot: 'petit_dej',
+    };
+    await repos.foodLog.saveToday({ date: '2026-08-11', entries: [entry] });
+
+    await refreshDaySnapshot(repos, DEFAULT_PROFILE, NO_SIGNALS, 90, NOW);
+
+    const archived = await repos.foodLogHistory.load();
+    expect(archived).toHaveLength(1);
+    expect(archived[0].date).toBe('2026-08-11');
+    expect(archived[0].entries).toEqual([entry]);
+    // food_log_today must have been reset to today, not left holding yesterday's raw entries
+    expect(await repos.foodLog.loadToday(NOW)).toEqual({ date: '2026-08-12', entries: [] });
+  });
+
+  it('does not archive an empty food log', async () => {
+    const repos = makeRepos();
+    const yesterday: DayEntry = {
+      date: '2026-08-11',
+      dayType: 'medium',
+      weight_kg: 91,
+      steps: null,
+      step_kcal: null,
+      sport_kcal: null,
+      active_cal: null,
+      total_cal: null,
+      burned_today: null,
+      food_kcal: null,
+      food_protein_g: null,
+      food_fat_g: null,
+      food_carb_g: null,
+    };
+    await repos.dayHistory.saveCurrentDay(yesterday);
+
+    await refreshDaySnapshot(repos, DEFAULT_PROFILE, NO_SIGNALS, 90, NOW);
+
+    expect(await repos.foodLogHistory.load()).toEqual([]);
   });
 
   it('respects a manual plaisir override for today', async () => {

@@ -8,6 +8,7 @@ import { PlaisirRepo } from '../../storage/repos/plaisirRepo';
 import { SportRepo } from '../../storage/repos/sportRepo';
 import { HabitsRepo } from '../../storage/repos/habitsRepo';
 import { FoodLogRepo } from '../../storage/repos/foodLogRepo';
+import { FoodLogHistoryRepo } from '../../storage/repos/foodLogHistoryRepo';
 import { ProfileRepo } from '../../storage/repos/profileRepo';
 import { ThemeRepo } from '../../storage/repos/themeRepo';
 import { NextcloudRepo } from '../../storage/repos/nextcloudRepo';
@@ -23,6 +24,7 @@ function makeRepos(): ImportRepos {
     sport: new SportRepo(storage),
     habits: new HabitsRepo(storage),
     foodLog: new FoodLogRepo(storage),
+    foodLogHistory: new FoodLogHistoryRepo(storage),
     profile: new ProfileRepo(storage),
     theme: new ThemeRepo(storage),
     nextcloud: new NextcloudRepo(storage),
@@ -86,6 +88,51 @@ describe('runImport', () => {
     await runImport(repos, JSON.stringify({ day_history: [DAY_ENTRY] }), true, NOW);
     const history = await repos.dayHistory.loadHistory();
     expect(history[0].food_kcal).toBe(2100);
+  });
+
+  it('imports food_log_history, is idempotent on a second import, and reports counts', async () => {
+    const repos = makeRepos();
+    const day: import('../../core/types').LogEntry = {
+      entry_id: 'e1',
+      habit_id: null,
+      label: 'Pomme',
+      portion_g: 150,
+      per100: { kcal: 52, protein_g: 0.3, fat_g: 0.2, carb_g: 14 },
+      kcal: 78,
+      protein_g: 0.5,
+      fat_g: 0.3,
+      carb_g: 21,
+      source: 'manual',
+      updated_at: Date.now(),
+      meal_slot: 'collation',
+    };
+    const blob = JSON.stringify({ food_log_history: [{ date: '2026-08-10', entries: [day] }] });
+
+    const first = await runImport(repos, blob, true, NOW);
+    if (first.ok) {
+      const flh = first.perKey.find((k) => k.key === 'food_log_history');
+      expect(flh?.note).toContain('1 jour');
+    }
+    expect(await repos.foodLogHistory.load()).toEqual([{ date: '2026-08-10', entries: [day] }]);
+
+    const second = await runImport(repos, blob, true, NOW);
+    if (second.ok) {
+      const flh = second.perKey.find((k) => k.key === 'food_log_history');
+      expect(flh?.note).toContain('0 jour');
+    }
+  });
+
+  it('never overwrites an existing food_log_history day with the imported one', async () => {
+    const repos = makeRepos();
+    await repos.foodLogHistory.archiveDay('2026-08-10', [
+      { entry_id: 'e-real', habit_id: null, label: 'Riz', portion_g: 150, per100: { kcal: 130, protein_g: 2.7, fat_g: 0.3, carb_g: 28 }, kcal: 195, protein_g: 4, fat_g: 0.5, carb_g: 42, source: 'manual', updated_at: 1, meal_slot: 'dejeuner' },
+    ]);
+    const blob = JSON.stringify({
+      food_log_history: [{ date: '2026-08-10', entries: [{ entry_id: 'e-stale', habit_id: null, label: 'Ancien', portion_g: 1, per100: { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0 }, kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0, source: 'manual', updated_at: 1, meal_slot: 'collation' }] }],
+    });
+    await runImport(repos, blob, true, NOW);
+    const history = await repos.foodLogHistory.load();
+    expect(history[0].entries[0].entry_id).toBe('e-real');
   });
 
   it('only adopts current_day when nothing is currently live', async () => {

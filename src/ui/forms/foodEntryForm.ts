@@ -12,7 +12,8 @@
 // screen-specific behavior. Same reasoning for the OFF-search-result -> prefill construction
 // (Day honors OFF's serving_size for the default portion, Habits doesn't) — left untouched
 // in each screen so this extraction doesn't quietly change either one's behavior.
-import type { Habit, Per100 } from '../../core/types';
+import type { Habit, MealSlot, Per100 } from '../../core/types';
+import { MEAL_SLOT_LABEL, MEAL_SLOT_ORDER } from '../../core/types';
 import { computeFoodMacros, kcalFromMacros } from '../../core/calc/food';
 import { escapeHtml, fmt1 } from '../util';
 import { searchOFF, type OffProduct } from '../../integrations/openFoodFacts';
@@ -82,6 +83,16 @@ export function renderPer100FieldsHtml(
     <label class="field-label">Glucides / 100g</label>
     <input type="number" ${fieldAttr(addr, 'carb')} value="${prefill.per100.carb_g}" step="0.1">
     <div ${totalPreviewAttrs(addr)} style="padding:4px 0 0">${previewText}</div>`;
+}
+
+// Shared "which meal" <select> — required (Day's actual log entries, PhotoScan's scanned
+// group) or optional with a "Non classé" first option (Habits' default tag on the habit
+// itself, not on an eaten instance). Read the chosen value straight from the DOM at save
+// time via `id`, same pattern as the per100 fields above — no extra state needed.
+export function renderMealSlotSelectHtml(id: string, selected: MealSlot | null, opts: { allowUnset?: boolean } = {}): string {
+  const unsetOption = opts.allowUnset ? `<option value="" ${!selected ? 'selected' : ''}>Non classé</option>` : '';
+  const options = MEAL_SLOT_ORDER.map((slot) => `<option value="${slot}" ${selected === slot ? 'selected' : ''}>${MEAL_SLOT_LABEL[slot]}</option>`).join('');
+  return `<label class="field-label">Repas</label><select id="${id}">${unsetOption}${options}</select>`;
 }
 
 export interface FoodEntryConfirmActions {
