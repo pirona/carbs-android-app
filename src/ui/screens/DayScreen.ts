@@ -5,12 +5,14 @@
 // Health Connect (Phase 4) pre-fills steps/activeCalories when granted — never a hard
 // dependency, manual sport_kcal entry always stays the primary/overridable signal.
 import type { DayType, Habit, LogEntry, Profile } from '../../core/types';
+import { MEAL_SLOT_ORDER, MEAL_SLOT_LABEL } from '../../core/types';
 import type { DayTrackingRepos, DaySnapshot } from '../../app/dayTracking';
 import { refreshDaySnapshot } from '../../app/dayTracking';
 import type { HabitsRepo, HabitSortMode } from '../../storage/repos/habitsRepo';
 import type { ProfileRepo } from '../../storage/repos/profileRepo';
 import type { HealthConnectAdapter, HealthConnectSignals } from '../../integrations/healthConnect/HealthConnectAdapter';
 import { computeFoodMacros } from '../../core/calc/food';
+import { groupByMeal, foodTotals } from '../../core/calc/mealGroup';
 import { type OffProduct } from '../../integrations/openFoodFacts';
 import {
   type FoodEntryPrefill,
@@ -25,7 +27,8 @@ import {
 import { guessMealSlot } from '../../core/calc/date';
 import type { MealSlot } from '../../core/types';
 import { escapeHtml, fmt1, attachLongPress } from '../util';
-import { iconAdd, iconRestaurant } from '../icons';
+import { attachMealSlotDrag } from '../mealSlotDrag';
+import { iconAdd, iconRestaurant, iconDragHandle } from '../icons';
 
 export interface DayScreenRepos extends DayTrackingRepos {
   habits: HabitsRepo;
@@ -194,21 +197,20 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
     });
   }
 
-  function todayCard(): string {
-    const totals = logEntries.reduce(
-      (acc, e) => ({ kcal: acc.kcal + e.kcal, protein_g: acc.protein_g + e.protein_g, fat_g: acc.fat_g + e.fat_g, carb_g: acc.carb_g + e.carb_g }),
-      { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0 },
-    );
-    const target = snapshot!.macros.kcal;
-    const diff = target !== null ? Math.round(totals.kcal - target) : null;
-
-    const entriesHtml =
-      logEntries.length === 0
-        ? '<div class="empty-hint">Rien de loggé aujourd\'hui.</div>'
-        : logEntries
-            .map(
-              (e) => `
-        <div class="log-entry-row">
+  // Always renders the section shell, even with zero entries — an empty meal must still exist
+  // as a valid drag-drop target (matches ConseilsScreen's equivalent, mealGroup.ts is shared).
+  function mealSectionHtml(slot: MealSlot, entries: LogEntry[]): string {
+    return `
+      <div class="form-block" data-meal-section="${slot}">
+        <div class="list-header"><span style="font-size:12px;font-weight:600">${MEAL_SLOT_LABEL[slot]}</span></div>
+        ${
+          entries.length === 0
+            ? '<div class="empty-hint">Rien ici.</div>'
+            : entries
+                .map(
+                  (e) => `
+        <div class="log-entry-row" data-entry-id="${e.entry_id}">
+          <span class="drag-handle">${iconDragHandle()}</span>
           <div class="log-entry-info">
             <div class="log-entry-label">${escapeHtml(e.label)}</div>
             <div class="log-entry-sub">${e.kcal} kcal · P${fmt1(e.protein_g)} L${fmt1(e.fat_g)} G${fmt1(e.carb_g)}</div>
@@ -217,8 +219,18 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
           <span class="empty-hint" style="padding:0">g</span>
           <button class="icon-btn" data-action="log-delete" data-id="${e.entry_id}">✕</button>
         </div>`,
-            )
-            .join('');
+                )
+                .join('')
+        }
+      </div>`;
+  }
+
+  function todayCard(): string {
+    const totals = foodTotals(logEntries);
+    const target = snapshot!.macros.kcal;
+    const diff = target !== null ? Math.round(totals.kcal - target) : null;
+    const groups = groupByMeal(logEntries);
+    const entriesHtml = MEAL_SLOT_ORDER.map((slot) => mealSectionHtml(slot, groups[slot])).join('');
 
     return `
       <div class="card">
@@ -229,10 +241,8 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
             ? logFormHtml()
             : `<button class="btn-cta" style="display:flex;align-items:center;justify-content:center;gap:6px" data-action="log-open">${iconAdd()} Logger un aliment</button>`
         }
-        <div class="form-block">
-          <div class="empty-hint" style="padding-bottom:4px">Journal du jour</div>
-          ${entriesHtml}
-        </div>
+        <div class="empty-hint" style="padding-bottom:4px">Journal du jour</div>
+        ${entriesHtml}
         <div class="today-totals">
           <div>
             <div class="today-totals-kcal">${fmt(totals.kcal)} <span class="empty-hint" style="padding:0">kcal</span></div>
@@ -315,6 +325,22 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       await repos.habits.save(newHabits);
       habits = newHabits;
     });
+  });
+
+  attachMealSlotDrag(container, {
+    handleSelector: '.drag-handle',
+    rowSelector: '[data-entry-id]',
+    sectionSelector: '[data-meal-section]',
+    onDrop: async (entryId, _fromSlot, toSlot) => {
+      await withRefresh(async () => {
+        const log = await repos.foodLog.loadToday(now());
+        const entry = log.entries.find((x) => x.entry_id === entryId);
+        if (!entry) return;
+        entry.meal_slot = toSlot;
+        entry.updated_at = Date.now();
+        await repos.foodLog.saveToday(log);
+      });
+    },
   });
 
   container.addEventListener('click', async (e) => {

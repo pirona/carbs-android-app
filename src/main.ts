@@ -22,6 +22,7 @@ import { NextcloudRepo } from './storage/repos/nextcloudRepo';
 import { backupToNextcloud, getNextcloudPassword } from './integrations/nextcloudWebdav';
 import { buildExportBlob } from './migration/exportDump';
 import { applyTheme } from './ui/theme';
+import { attachSwipeNav } from './ui/swipeNav';
 import { iconHome, iconTrendingUp, iconPhotoCamera, iconCalendarMonth, iconRestaurantMenu, iconSettings, iconLightbulb } from './ui/icons';
 
 const storage = new PreferencesStorageAdapter();
@@ -138,5 +139,16 @@ function showTab(id: TabId) {
 navItems.forEach((btn) => btn.addEventListener('click', () => showTab(btn.dataset.tab as TabId)));
 topbarConseils.addEventListener('click', () => showTab('conseils'));
 topbarSettings.addEventListener('click', () => showTab('settings'));
+
+// Scoped to the 5 bottom-nav destinations, same "not a several-times-a-day destination"
+// reasoning as PRIMARY_TABS above — swiping never lands on Conseils/Réglages. Clamped, not
+// looped, at either end.
+attachSwipeNav(app, (direction) => {
+  const activeId = app.querySelector<HTMLButtonElement>('#tabs .nav-item.active')?.dataset.tab as TabId | undefined;
+  const idx = PRIMARY_TABS.findIndex((t) => t.id === activeId);
+  if (idx === -1) return;
+  const nextIdx = Math.min(PRIMARY_TABS.length - 1, Math.max(0, idx + (direction === 'left' ? 1 : -1)));
+  if (nextIdx !== idx) showTab(PRIMARY_TABS[nextIdx].id);
+});
 
 showTab('day');

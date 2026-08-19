@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// New, separate webhook from /food-parse (bigger image payloads = different size/abuse
-// surface). Needs manual import of n8n_food_vision_workflow.json into the live n8n
-// instance (see plan §Phase 6/7.1) — no n8n API access from Claude Code on this project.
+// Separate webhook from /food-parse (bigger image payloads = different size/abuse surface).
+// Live on the n8n instance — see n8n_food_vision_workflow.json for the exact tool schema/prompt
+// sent to Mistral, also quoted in README.md's "AI prompts" section.
 const N8N_FOOD_VISION_URL = 'https://n8n.gyozamancave.fr/webhook/food-vision';
 
 export interface PlateComponent {

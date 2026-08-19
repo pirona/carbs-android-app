@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import type { DayType, MealSlot } from '../core/types';
 
-// New webhook, not yet live on the n8n instance — see n8n_carb_advice_workflow.json
-// (ready to import) and its accompanying note for the exact system prompt shipped with it.
-// No n8n API access from Claude Code on this project (same constraint as food-vision).
+// Live on the n8n instance — see n8n_carb_advice_workflow.json (verified identical to the
+// active workflow) for the exact system prompt, also quoted in README.md's "AI prompts" section.
 const N8N_CARB_ADVICE_URL = 'https://n8n.gyozamancave.fr/webhook/carb-advice';
 
 export interface CarbAdviceMealItem {

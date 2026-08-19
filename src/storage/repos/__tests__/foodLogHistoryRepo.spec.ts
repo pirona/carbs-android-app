@@ -59,4 +59,21 @@ describe('FoodLogHistoryRepo', () => {
     expect(history[0].date).toBe('2026-01-31');
     expect(history.find((e) => e.date === '2026-01-01')).toBeUndefined();
   });
+
+  it('updates the meal_slot of an entry on an archived day', async () => {
+    const repo = new FoodLogHistoryRepo(new InMemoryStorageAdapter());
+    await repo.archiveDay('2026-08-10', [ENTRY]);
+    await repo.updateEntryMealSlot('2026-08-10', 'e1', 'diner');
+    const history = await repo.load();
+    expect(history[0].entries[0].meal_slot).toBe('diner');
+  });
+
+  it('does nothing when the date or entry is not found', async () => {
+    const repo = new FoodLogHistoryRepo(new InMemoryStorageAdapter());
+    await repo.archiveDay('2026-08-10', [ENTRY]);
+    await repo.updateEntryMealSlot('2026-08-11', 'e1', 'diner');
+    await repo.updateEntryMealSlot('2026-08-10', 'nope', 'diner');
+    const history = await repo.load();
+    expect(history[0].entries[0].meal_slot).toBe('collation');
+  });
 });

@@ -1,0 +1,149 @@
+{
+  "name": "Food Vision (Mistral)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "food-vision",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://hass.gyozamancave.fr"
+        }
+      },
+      "id": "b512887f-f275-4f29-a169-3d1fdd862017",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "food-vision"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.mistral.ai/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "mistralCloudApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { model: \"mistral-small-latest\", tool_choice: \"any\", tools: [ { type: \"function\", function: { name: \"extract_plate\", description: \"Identifie les composants alimentaires visibles sur une photo d'assiette, en français, avec une estimation grossière de la portion de chacun en grammes et de leurs valeurs nutritionnelles pour 100g (à partir de la connaissance générale de l'aliment, pas d'une mesure précise). Si la photo est ambiguë, floue, ou ne montre pas de nourriture identifiable, le préciser dans overall_note.\", parameters: { type: \"object\", properties: { components: { type: \"array\", description: \"Liste des composants alimentaires identifiés sur la photo\", items: { type: \"object\", properties: { label: { type: \"string\", description: \"Nom court et clair du composant (ex: riz basmati, poulet grillé)\" }, estimated_grams: { type: \"number\", description: \"Portion estimée en grammes\" }, kcal_100g: { type: \"number\", description: \"Estimation kcal pour 100g de ce composant\" }, protein_100g: { type: \"number\" }, fat_100g: { type: \"number\" }, carb_100g: { type: \"number\" }, confidence: { type: \"string\", enum: [\"high\",\"medium\",\"low\"] } }, required: [\"label\",\"estimated_grams\",\"kcal_100g\",\"protein_100g\",\"fat_100g\",\"carb_100g\",\"confidence\"] } }, overall_note: { type: \"string\", description: \"Remarque générale courte si l'image est ambiguë, incomplète, ou si l'estimation est incertaine, sinon chaîne vide\" } }, required: [\"components\",\"overall_note\"] } } } ], messages: [ { role: \"user\", content: [ { type: \"text\", text: \"Identifie les aliments visibles sur cette photo d'assiette et estime leur portion en grammes.\" }, { type: \"image_url\", image_url: \"data:\" + $json.body.mime_type + \";base64,\" + $json.body.image_base64 } ] } ] } }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "c26b2787-87f8-4d2d-9414-ed4cf069572a",
+      "name": "Mistral — extract_plate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Uu5dXouwIwRE33yn",
+          "name": "MAstodon Le Boudoir"
+        },
+        "mistralCloudApi": {
+          "id": "Ie7cAbsVLbsEukuQ",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = $input.first().json.choices?.[0]?.message;\nconst call = msg?.tool_calls?.[0];\nlet result;\ntry {\n  result = call ? JSON.parse(call.function.arguments) : { error: 'no_tool_call', raw: msg };\n} catch (e) {\n  result = { error: 'parse_error', raw: call?.function?.arguments };\n}\nreturn [{ json: result }];"
+      },
+      "id": "7a9d8ce1-28da-4d3b-bd3c-f62a1f026e10",
+      "name": "Extract tool_call",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "https://hass.gyozamancave.fr"
+              }
+            ]
+          }
+        }
+      },
+      "id": "b5bd5b68-b7f4-40da-b1bb-1f82e0cb9eb9",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Mistral — extract_plate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mistral — extract_plate": {
+      "main": [
+        [
+          {
+            "node": "Extract tool_call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract tool_call": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  }
+}

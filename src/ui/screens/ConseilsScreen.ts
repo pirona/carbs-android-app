@@ -2,17 +2,24 @@
 // Caloric-deficit advice grounded in the most recent fully-logged past day (weight, sport/steps
 // and food all present — same "tracked day" bar as calcWeekRealDeficit) — today is deliberately
 // excluded since it's still in progress. Food is grouped by meal + hors-repas per the day's
-// LogEntry.meal_slot, mirroring how the user actually eats rather than one flat list. The advice
-// text itself comes from Mistral via a new n8n webhook (see n8n_carb_advice_workflow.json) with
-// a system prompt pinned to recognized public-health bodies (ANSES/EFSA/OMS etc.) — this screen
-// only ever sends structured numbers, never asks the model to invent nutrition facts.
+// LogEntry.meal_slot, mirroring how the user actually eats rather than one flat list, and each
+// entry can be dragged into another section to fix a mislogged meal before asking for advice
+// (see mealSlotDrag.ts) — corrections write straight through to FoodLogHistoryRepo since this
+// is an archived day, not today's log. The advice text itself comes from Mistral via the
+// carb-advice n8n webhook (see n8n_carb_advice_workflow.json, live and verified identical to
+// this repo's copy) with a system prompt pinned to recognized public-health bodies
+// (ANSES/EFSA/OMS etc.) — this screen only ever sends structured numbers, never asks the model
+// to invent nutrition facts.
 import type { DayEntry, DayType, LogEntry, MealSlot, Profile } from '../../core/types';
 import { MEAL_SLOT_ORDER, MEAL_SLOT_LABEL } from '../../core/types';
+import { groupByMeal, foodTotals } from '../../core/calc/mealGroup';
 import type { DayHistoryRepo } from '../../storage/repos/dayHistoryRepo';
 import type { FoodLogHistoryRepo } from '../../storage/repos/foodLogHistoryRepo';
 import type { ProfileRepo } from '../../storage/repos/profileRepo';
 import { calcMacros } from '../../core/calc/macros';
 import { fetchCarbAdvice, type CarbAdviceMacros, type CarbAdviceRequest, type CarbAdviceResult } from '../../integrations/n8nCarbAdvice';
+import { attachMealSlotDrag } from '../mealSlotDrag';
+import { iconDragHandle } from '../icons';
 import { escapeHtml, fmt1 } from '../util';
 
 export interface ConseilsScreenRepos {
@@ -30,19 +37,6 @@ interface AdviceDay {
 
 function fmt(n: number): string {
   return Math.round(n).toLocaleString('fr-FR');
-}
-
-function foodTotals(entries: LogEntry[]) {
-  return entries.reduce(
-    (acc, e) => ({ kcal: acc.kcal + e.kcal, protein_g: acc.protein_g + e.protein_g, fat_g: acc.fat_g + e.fat_g, carb_g: acc.carb_g + e.carb_g }),
-    { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0 },
-  );
-}
-
-function groupByMeal(entries: LogEntry[]): Record<MealSlot, LogEntry[]> {
-  const groups: Record<MealSlot, LogEntry[]> = { petit_dej: [], dejeuner: [], diner: [], collation: [] };
-  entries.forEach((e) => groups[e.meal_slot]?.push(e));
-  return groups;
 }
 
 // day_history and food_log_history are both kept newest-first (prepended on archive) — walk
@@ -72,23 +66,29 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
   let adviceError: string | null = null;
   let advice: CarbAdviceResult | null = null;
 
+  // Always renders the section shell, even with zero entries — an empty meal must still exist
+  // as a valid drop target (e.g. dragging the last entry out of "diner" into "collation").
   function mealSectionHtml(slot: MealSlot, entries: LogEntry[]): string {
-    if (entries.length === 0) return '';
     const totals = foodTotals(entries);
     return `
-      <div class="form-block">
+      <div class="form-block" data-meal-section="${slot}">
         <div class="list-header"><span style="font-size:12px;font-weight:600">${MEAL_SLOT_LABEL[slot]}</span><span class="empty-hint" style="padding:0">${fmt(totals.kcal)} kcal</span></div>
-        ${entries
-          .map(
-            (e) => `
-          <div class="log-entry-row">
+        ${
+          entries.length === 0
+            ? '<div class="empty-hint">Rien ici.</div>'
+            : entries
+                .map(
+                  (e) => `
+          <div class="log-entry-row" data-entry-id="${e.entry_id}">
+            <span class="drag-handle">${iconDragHandle()}</span>
             <div class="log-entry-info">
               <div class="log-entry-label">${escapeHtml(e.label)}</div>
               <div class="log-entry-sub">${e.portion_g} g · ${e.kcal} kcal</div>
             </div>
           </div>`,
-          )
-          .join('')}
+                )
+                .join('')
+        }
       </div>`;
   }
 
@@ -193,6 +193,20 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
     }
     adviceLoading = false;
     render();
+  });
+
+  attachMealSlotDrag(container, {
+    handleSelector: '.drag-handle',
+    rowSelector: '[data-entry-id]',
+    sectionSelector: '[data-meal-section]',
+    onDrop: async (entryId, _fromSlot, toSlot) => {
+      if (!adviceDay) return;
+      const entry = adviceDay.entries.find((e) => e.entry_id === entryId);
+      if (!entry) return;
+      entry.meal_slot = toSlot;
+      await repos.foodLogHistory.updateEntryMealSlot(adviceDay.day.date, entryId, toSlot);
+      render();
+    },
   });
 
   (async () => {

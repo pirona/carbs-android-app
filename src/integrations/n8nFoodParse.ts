@@ -4,6 +4,8 @@ import type { Per100 } from '../core/types';
 // Public webhook, no client-side secret — the Mistral API key lives server-side in n8n's
 // httpHeaderAuth credential. Same endpoint used by food-habits.html/carb-cycling.html
 // (doAIInterpret/doLogAIInterpret), verified live/healthy before wiring this in (Phase 5).
+// See n8n_food_parse_workflow.json for the exact tool schema/prompt sent to Mistral, also
+// quoted in README.md's "AI prompts" section.
 const N8N_FOOD_PARSE_URL = 'https://n8n.gyozamancave.fr/webhook/food-parse';
 
 export interface FoodParseResult {
