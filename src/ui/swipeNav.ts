@@ -4,14 +4,24 @@
 // fresh clone on every tab switch (see showTab) and would silently drop any listener attached
 // directly to it. Pointer-events, same family as attachLongPress/attachMealSlotDrag — no
 // gesture library in this project.
-const MOVE_THRESHOLD = 60;
-const AXIS_RATIO = 1.5; // horizontal must dominate vertical by this much to count as a swipe
+//
+// Reports raw progress (onMove/onEnd give the live pixel offset) rather than just a final
+// direction — main.ts uses that to visually drag #screen with the finger (see showTab's swipe
+// wiring) instead of switching tabs as a flat, unanimated jump.
+const SLOP = 10; // px of movement before committing to "this is a horizontal gesture", not a tap/scroll
+const AXIS_RATIO = 1.5; // horizontal must dominate vertical by this much to lock in as a swipe
 
-export function attachSwipeNav(root: HTMLElement, onSwipe: (direction: 'left' | 'right') => void): void {
+export interface SwipeNavCallbacks {
+  onStart: () => void;
+  onMove: (dx: number) => void;
+  onEnd: (dx: number) => void;
+}
+
+export function attachSwipeNav(root: HTMLElement, callbacks: SwipeNavCallbacks): void {
   let pointerId: number | null = null;
   let startX = 0;
   let startY = 0;
-  let tracking = false;
+  let started = false;
 
   root.addEventListener('pointerdown', (e) => {
     // Never hijack a gesture that starts on an interactive control or the meal-slot drag
@@ -20,21 +30,35 @@ export function attachSwipeNav(root: HTMLElement, onSwipe: (direction: 'left' | 
     pointerId = e.pointerId;
     startX = e.clientX;
     startY = e.clientY;
-    tracking = true;
+    started = false;
+  });
+
+  root.addEventListener('pointermove', (e) => {
+    if (pointerId === null || e.pointerId !== pointerId) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if (!started) {
+      if (Math.abs(dx) < SLOP || Math.abs(dx) < Math.abs(dy) * AXIS_RATIO) return;
+      started = true;
+      callbacks.onStart();
+    }
+    callbacks.onMove(dx);
   });
 
   root.addEventListener('pointerup', (e) => {
-    if (!tracking || pointerId === null || e.pointerId !== pointerId) return;
-    tracking = false;
-    pointerId = null;
+    if (pointerId === null || e.pointerId !== pointerId) return;
     const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-    if (Math.abs(dx) < MOVE_THRESHOLD || Math.abs(dx) < Math.abs(dy) * AXIS_RATIO) return;
-    onSwipe(dx < 0 ? 'left' : 'right');
+    const wasStarted = started;
+    pointerId = null;
+    started = false;
+    if (wasStarted) callbacks.onEnd(dx);
   });
 
-  root.addEventListener('pointercancel', () => {
-    tracking = false;
+  root.addEventListener('pointercancel', (e) => {
+    if (pointerId === null || e.pointerId !== pointerId) return;
+    const wasStarted = started;
     pointerId = null;
+    started = false;
+    if (wasStarted) callbacks.onEnd(0);
   });
 }

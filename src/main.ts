@@ -130,7 +130,13 @@ function showTab(id: TabId) {
   // it's given (see DayScreen etc.) — reusing the same node across renders would stack a
   // new listener on top of every previous one, firing actions multiple times per tap.
   // Swapping in a bare clone before every render guarantees a listener-free container.
+  // cloneNode(false) copies the *current* style attribute too — any leftover drag transform
+  // from a swipe (see attachSwipeNav wiring below) must be cleared on `screen` before cloning,
+  // or the fresh container would inherit it and render already shifted off-screen.
+  screen.style.transform = '';
+  screen.style.transition = '';
   const fresh = screen.cloneNode(false) as HTMLDivElement;
+  fresh.classList.add('screen-enter');
   screen.replaceWith(fresh);
   screen = fresh;
   tab.render(screen);
@@ -142,13 +148,44 @@ topbarSettings.addEventListener('click', () => showTab('settings'));
 
 // Scoped to the 5 bottom-nav destinations, same "not a several-times-a-day destination"
 // reasoning as PRIMARY_TABS above — swiping never lands on Conseils/Réglages. Clamped, not
-// looped, at either end.
-attachSwipeNav(app, (direction) => {
+// looped, at either end. #screen visually follows the finger (transform only — never touches
+// layout/flow, so it can't disturb page scroll or the fixed topbar/tabs) and either finishes
+// sliding off before the tab switches, or springs back if the drag didn't cross the commit
+// threshold. A damped nudge (not a dead stop) at either end signals "no more screens this way".
+const SWIPE_COMMIT_FRACTION = 0.3;
+const EDGE_RESISTANCE = 0.35;
+
+function activeTabIndex(): number {
   const activeId = app.querySelector<HTMLButtonElement>('#tabs .nav-item.active')?.dataset.tab as TabId | undefined;
-  const idx = PRIMARY_TABS.findIndex((t) => t.id === activeId);
-  if (idx === -1) return;
-  const nextIdx = Math.min(PRIMARY_TABS.length - 1, Math.max(0, idx + (direction === 'left' ? 1 : -1)));
-  if (nextIdx !== idx) showTab(PRIMARY_TABS[nextIdx].id);
+  return PRIMARY_TABS.findIndex((t) => t.id === activeId);
+}
+
+attachSwipeNav(app, {
+  onStart: () => {
+    screen.style.transition = 'none';
+  },
+  onMove: (dx) => {
+    const idx = activeTabIndex();
+    const dir = dx < 0 ? 1 : -1;
+    const hasTarget = idx !== -1 && idx + dir >= 0 && idx + dir <= PRIMARY_TABS.length - 1;
+    screen.style.transform = `translateX(${hasTarget ? dx : dx * EDGE_RESISTANCE}px)`;
+  },
+  onEnd: (dx) => {
+    const idx = activeTabIndex();
+    const dir = dx < 0 ? 1 : -1;
+    const hasTarget = idx !== -1 && idx + dir >= 0 && idx + dir <= PRIMARY_TABS.length - 1;
+    const width = app.clientWidth || window.innerWidth;
+    const commit = hasTarget && Math.abs(dx) > width * SWIPE_COMMIT_FRACTION;
+
+    screen.style.transition = 'transform 180ms ease-out';
+    if (commit) {
+      const target = PRIMARY_TABS[idx + dir].id;
+      screen.style.transform = `translateX(${dx < 0 ? -width : width}px)`;
+      screen.addEventListener('transitionend', () => showTab(target), { once: true });
+    } else {
+      screen.style.transform = 'translateX(0)';
+    }
+  },
 });
 
 showTab('day');

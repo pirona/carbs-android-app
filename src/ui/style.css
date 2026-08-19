@@ -125,6 +125,10 @@ body {
    recognize it as a screen-switch swipe. */
 #app {
   touch-action: pan-y;
+  /* Without this, a dragged #screen sticking out past the viewport during a swipe becomes part
+     of the page's scrollable overflow in current browser engines (transform is applied after
+     layout, but still counted) — a stray horizontal scrollbar/rubber-band would appear. */
+  overflow-x: hidden;
 }
 
 h1 {
@@ -611,6 +615,23 @@ label.field-label {
 #screen {
   padding: 14px;
   padding-bottom: calc(112px + env(safe-area-inset-bottom));
+}
+
+/* Applied to every fresh #screen clone in showTab (tap or swipe alike) — a plain hard cut felt
+   flat once the swipe-driven drag (see main.ts) made the outgoing screen visibly slide away. */
+@keyframes screen-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.screen-enter {
+  animation: screen-enter 180ms ease-out;
 }
 
 #tabs {
