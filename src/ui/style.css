@@ -623,7 +623,22 @@ label.field-label {
    scrolled away with the page. Keeping the clip scoped to this #screen-only wrapper avoids
    #topbar ever picking up a non-viewport scroll container. */
 #screen-viewport {
+  /* overflow-y pinned to hidden explicitly, not left at its default 'visible' — leaving it
+     unset re-triggers the exact coupling quirk described above (one axis non-visible forces
+     the other to compute as 'auto'), just one level down from #app. That regressed real
+     swipe-nav: an 'auto' #screen-viewport becomes a fresh scroll container sitting in the
+     touch's hit-test path, and this WebView's gesture arbiter grabbed the horizontal drag for
+     itself before JS ever saw enough pointermove to recognize it (same failure mode touch-action
+     pan-y on #app was already fixing once, confirmed regressed on-device with a real swipe).
+     Pinning both axes to an explicit non-'visible' value sidesteps the quirk entirely: neither
+     longhand is 'visible', so there's nothing left for the browser to reconcile. touch-action is
+     repeated here too, defensively — this element sits between #app (which sets it) and the
+     touch target, and the "used" value is the intersection of the whole ancestor chain, but a
+     fresh scroll container is exactly the kind of element real WebViews have been seen to treat
+     specially regardless of the spec-computed intersection. */
   overflow-x: hidden;
+  overflow-y: hidden;
+  touch-action: pan-y;
 }
 
 #screen {
