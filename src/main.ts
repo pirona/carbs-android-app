@@ -102,7 +102,9 @@ app.innerHTML = `
       <button class="topbar-icon" id="topbar-settings" data-tab="settings" aria-label="Réglages">${iconSettings()}</button>
     </div>
   </header>
-  <div id="screen"></div>
+  <div id="screen-viewport">
+    <div id="screen"></div>
+  </div>
   <nav id="tabs">
     <div id="tabs-inner">
       ${PRIMARY_TABS.map(

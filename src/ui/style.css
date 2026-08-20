@@ -125,10 +125,6 @@ body {
    recognize it as a screen-switch swipe. */
 #app {
   touch-action: pan-y;
-  /* Without this, a dragged #screen sticking out past the viewport during a swipe becomes part
-     of the page's scrollable overflow in current browser engines (transform is applied after
-     layout, but still counted) — a stray horizontal scrollbar/rubber-band would appear. */
-  overflow-x: hidden;
 }
 
 h1 {
@@ -613,6 +609,21 @@ label.field-label {
 .topbar-icon.active {
   background: var(--secondary-container);
   color: var(--on-secondary-container);
+}
+
+/* Dedicated wrapper (sibling of #topbar, not an ancestor) purely to clip the horizontal
+   overflow a dragged #screen produces during a swipe (transform is applied after layout, but a
+   translated box still contributes to scrollable overflow — a stray horizontal
+   scrollbar/rubber-band was confirmed on-device without this). This used to live on #app
+   itself, but #app is #topbar's parent too: giving #app any non-visible overflow-x forces its
+   overflow-y to compute as 'auto' as well (a CSS quirk — an ancestor's overflow-x/y longhands
+   can't diverge from 'visible' independently), which silently turns #app into the "nearest
+   scrolling ancestor" position:sticky resolves #topbar against. Since #app's own height is
+   auto/content-sized it never actually scrolls itself — so #topbar stopped sticking and just
+   scrolled away with the page. Keeping the clip scoped to this #screen-only wrapper avoids
+   #topbar ever picking up a non-viewport scroll container. */
+#screen-viewport {
+  overflow-x: hidden;
 }
 
 #screen {
