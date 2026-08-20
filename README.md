@@ -32,7 +32,7 @@ npx cap sync android  # sync web build + plugins into the Android project
 
 ## AI prompts
 
-Three optional AI features call the Mistral API directly from the app — Mistral is the only AI
+Four optional AI features call the Mistral API directly from the app — Mistral is the only AI
 provider this app talks to, no other model/vendor is involved anywhere — using an API key the
 user enters in Settings and stores encrypted on-device (Android Keystore) — never in plain text,
 and never included in the export/backup blob (unlike the Nextcloud app password, which is
@@ -42,9 +42,9 @@ text, one photo, or nutrition numbers already computed by the app — never acco
 history. In every case the AI's output is a suggestion: the user reviews and can edit it, and
 nothing is ever saved automatically.
 
-The plate-photo scan in particular is not always reliable — vision models can misidentify what's
-on the photo (see `PhotoScanScreen`'s human-confirmation step, never an auto-save). Treat its
-output as a rough starting point to correct, not a trustworthy reading.
+The photo-scan features in particular are not always reliable — vision models can misidentify
+what's on the photo (see `PhotoScanScreen`'s human-confirmation step, never an auto-save). Treat
+their output as a rough starting point to correct, not a trustworthy reading.
 
 The exact request sent for each feature is committed to this repo as source code, so the prompt
 below is never just a description — the file is the source of truth:
@@ -53,15 +53,18 @@ below is never just a description — the file is the source of truth:
   natural-language food entry
 - [`src/integrations/mistralFoodVision.ts`](src/integrations/mistralFoodVision.ts) —
   photo-of-a-plate scan
+- [`src/integrations/mistralReceiptScan.ts`](src/integrations/mistralReceiptScan.ts) —
+  photo-of-a-receipt scan (multiple items at once)
 - [`src/integrations/mistralCarbAdvice.ts`](src/integrations/mistralCarbAdvice.ts) —
   caloric-deficit advice on a fully-logged past day
 
-These three features used to relay through webhooks on a self-hosted n8n instance instead of
-calling Mistral directly. The original n8n workflow exports are kept in the repo as historical
-reference — [`n8n_food_parse_workflow.json`](n8n_food_parse_workflow.json),
+The first three (text/plate/receipt) used to relay through webhooks on a self-hosted n8n
+instance instead of calling Mistral directly. The original n8n workflow exports are kept in the
+repo as historical reference — [`n8n_food_parse_workflow.json`](n8n_food_parse_workflow.json),
 [`n8n_food_vision_workflow.json`](n8n_food_vision_workflow.json),
 [`n8n_carb_advice_workflow.json`](n8n_carb_advice_workflow.json) — but are disabled on the n8n
-instance and no longer used by the app.
+instance and no longer used by the app. Receipt scanning was added after the n8n retirement, so
+it has no n8n-era equivalent.
 
 ### Food Parse — natural-language food entry
 
@@ -105,6 +108,36 @@ Message: { role: "user", content: [
 
 The photo is sent to Mistral for that one inference call and is never stored anywhere — the
 base64 string is a local variable, discarded as soon as the call resolves or fails.
+
+### Receipt Scan — photo-of-a-receipt scan (multiple items)
+
+Same pattern, model `mistral-small-latest`, tool calling, a single tool `extract_receipt_items`.
+Unlike Food Vision, the model is explicitly told **not** to estimate nutrition — a receipt shows
+a product name and a price, not nutrition, so macros come from the app's own OpenFoodFacts/CIQUAL
+lookup afterward (see `receiptItemToRow` in
+[`src/app/photoScanMatch.ts`](src/app/photoScanMatch.ts)), or are left at zero for manual entry —
+never fabricated by the model for this feature:
+
+```
+Tool: extract_receipt_items
+"Extrait les articles alimentaires listés sur une photo de ticket de caisse (supermarché ou
+restaurant), en français. Pour chaque article, donne un nom court et clair (pas le libellé brut
+de caisse), la quantité si indiquée, et le texte exact tel qu'imprimé. NE PAS estimer de valeurs
+nutritionnelles. Ignore les lignes qui ne sont pas de la nourriture (sacs, consigne, réductions,
+total, TVA, paiement...). Si le ticket est flou, illisible, ou n'est pas un ticket de caisse, le
+préciser dans merchant_note."
+
+Parameters: items[] (label, raw_text, quantity, confidence ("high"|"medium"|"low")), merchant_note
+
+Message: { role: "user", content: [
+  { type: "text", text: "Identifie les articles alimentaires listés sur ce ticket de caisse." },
+  { type: "image_url", image_url: "data:<mime>;base64,<the captured photo>" }
+] }
+```
+
+Scanned items can be logged into today's journal (one shared meal, like Food Vision) or added
+as independent entries to the Habitudes library for logging later — chosen per scan, since a
+shopping receipt typically spans several future meals rather than being eaten all at once.
 
 ### Carb Advice — caloric-deficit advice
 

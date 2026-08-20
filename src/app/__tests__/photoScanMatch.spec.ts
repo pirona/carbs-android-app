@@ -1,8 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { describe, expect, it } from 'vitest';
-import { componentToRow, habitToRows, tryRecognizeHabit } from '../photoScanMatch';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { OffProduct } from '../../integrations/openFoodFacts';
+
+const searchOFF = vi.fn<(query: string) => Promise<OffProduct[]>>();
+vi.mock('../../integrations/openFoodFacts', () => ({ searchOFF: (query: string) => searchOFF(query) }));
+
+import { componentToRow, habitToRows, receiptItemToRow, tryRecognizeHabit } from '../photoScanMatch';
 import type { Habit } from '../../core/types';
 import type { PlateComponent } from '../../integrations/mistralFoodVision';
+import type { ReceiptItem } from '../../integrations/mistralReceiptScan';
+
+function receiptItem(overrides: Partial<ReceiptItem> & { label: string }): ReceiptItem {
+  return { raw_text: overrides.label, quantity: 1, confidence: 'medium', ...overrides };
+}
 
 function component(overrides: Partial<PlateComponent> & { label: string }): PlateComponent {
   return {
@@ -111,5 +121,42 @@ describe('habitToRows', () => {
       updated_at: Date.now(),
     };
     expect(habitToRows(habit)).toEqual([]);
+  });
+});
+
+describe('receiptItemToRow', () => {
+  beforeEach(() => searchOFF.mockReset());
+
+  it('matches on OpenFoodFacts first, ahead of CIQUAL', async () => {
+    searchOFF.mockResolvedValueOnce([
+      { name: 'Yaourt fraise', brand: 'Yoplait', code: '123', per100: { kcal: 80, protein_g: 3, fat_g: 2, carb_g: 12 }, servingGrams: 85 },
+    ]);
+    const row = await receiptItemToRow(receiptItem({ label: 'YOP FRAISE 4X85G' }));
+    expect(row.source).toBe('off');
+    expect(row.label).toBe('Yaourt fraise');
+    expect(row.portion_g).toBe(85);
+    expect(row.offResults).toHaveLength(1);
+  });
+
+  it('falls back to an unbiased CIQUAL match when OFF misses — no raw/cooked reordering', async () => {
+    searchOFF.mockResolvedValueOnce([]);
+    // "poulet cru" is exactly the case componentToRow's plate-specific bias would try to
+    // deprioritize — receiptItemToRow must NOT apply that bias, groceries are legitimately raw.
+    const row = await receiptItemToRow(receiptItem({ label: 'poulet cru' }));
+    expect(row.source).toBe('ciqual');
+    expect(row.label.toLowerCase()).toContain('cru');
+  });
+
+  it('falls back to a zeroed manual row when neither OFF nor CIQUAL match — never fabricates macros', async () => {
+    searchOFF.mockResolvedValueOnce([]);
+    const row = await receiptItemToRow(receiptItem({ label: 'xyzzy nonexistent gibberish 12345' }));
+    expect(row.source).toBe('manual');
+    expect(row.per100).toEqual({ kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0 });
+  });
+
+  it('treats a thrown OFF search error as a miss and falls through to CIQUAL', async () => {
+    searchOFF.mockRejectedValueOnce(new Error('network down'));
+    const row = await receiptItemToRow(receiptItem({ label: 'riz' }));
+    expect(row.source).toBe('ciqual');
   });
 });

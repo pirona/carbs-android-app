@@ -1,20 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Photo-based food logging — the "Foodvisor" entry point (plan §Phase 6/7.4-7.5).
-// Flow: capture -> Mistral vision (n8n /food-vision) -> per-component match cascade
-// (fast-path against saved composite habits, else CIQUAL auto-match, else OFF on demand,
-// else Mistral's own rough estimate) -> editable confirm rows -> explicit "Confirmer &
-// logger" tap. The photo (base64) is held only in a local closure var during the capture
-// action and is never assigned anywhere else — nothing persists it, on-device or server-side
-// (see n8n_food_vision_workflow.json's saveDataSuccessExecution:"none").
+// Photo-based food logging — the "Foodvisor" entry point (plan §Phase 6/7.4-7.5), plus a
+// receipt-scan mode for adding several items from one ticket de caisse photo at once.
+// Plate flow: capture -> Mistral vision -> per-component match cascade (fast-path against
+// saved composite habits, else CIQUAL auto-match, else OFF on demand, else Mistral's own
+// rough estimate) -> editable confirm rows -> logged to today's journal, optionally also
+// saved as one composite habit. Receipt flow: capture -> Mistral vision (no macros asked of
+// the model — see mistralReceiptScan.ts) -> per-item match cascade (OFF first, then CIQUAL,
+// then manual — see photoScanMatch.ts's receiptItemToRow) -> editable confirm rows -> either
+// logged to today's journal (one shared meal) or added as N independent habits, chosen per
+// scan. In every flow, the photo (base64) is held only in a local closure var during the
+// capture action and is never assigned anywhere else — nothing persists it.
 import type { LogEntry, MealSlot } from '../../core/types';
 import type { HabitsRepo } from '../../storage/repos/habitsRepo';
 import type { FoodLogRepo } from '../../storage/repos/foodLogRepo';
-import { capturePlatePhoto } from '../../integrations/camera';
+import { captureFoodPhoto } from '../../integrations/camera';
 import { analyzePlatePhoto } from '../../integrations/mistralFoodVision';
+import { analyzeReceiptPhoto } from '../../integrations/mistralReceiptScan';
 import { MissingMistralKeyError } from '../../integrations/mistralClient';
 import { lookupOFF, scanBarcode } from '../../integrations/barcodeScan';
 import { searchOFF } from '../../integrations/openFoodFacts';
-import { componentToRow, habitToRows, tryRecognizeHabit, type RowSource, type ScanRow } from '../../app/photoScanMatch';
+import { componentToRow, habitToRows, receiptItemToRow, tryRecognizeHabit, type RowSource, type ScanRow } from '../../app/photoScanMatch';
 import { computeFoodMacros, kcalFromMacros } from '../../core/calc/food';
 import { guessMealSlot } from '../../core/calc/date';
 import { renderPer100FieldsHtml, renderMealSlotSelectHtml } from '../forms/foodEntryForm';
@@ -54,9 +59,16 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
   // render() is called repeatedly while reviewing (toggle/remove row, pick a candidate...) and
   // would otherwise silently reset the user's choice back to the guessed default each time.
   let mealSlot: MealSlot = guessMealSlot(new Date());
-  // Which flow to relaunch when "Réessayer" is tapped from the error state — the two
-  // scan modes need different retry actions, so a single hardcoded button can't know.
-  let lastMode: 'photo' | 'barcode' | null = null;
+  // Which flow to relaunch when "Réessayer" is tapped from the error state, AND which
+  // review-UI shape to render (the receipt-only save-target toggle below) — a single value
+  // serving both purposes, since it's already set unconditionally right after every
+  // successful capture and read reliably throughout 'reviewing'/'error'.
+  let lastMode: 'photo' | 'barcode' | 'receipt' | null = null;
+  // Per-scan choice, receipt mode only — a shopping receipt's items aren't "eaten now" the
+  // way a plate/barcode scan's are, so unlike those two, a receipt scan can target the
+  // Habitudes library instead of today's journal. Reset to the default at the start of every
+  // startReceiptScan() and on scan-cancel, same lifecycle as mealSlot.
+  let receiptSaveTarget: 'journal' | 'habits' = 'journal';
   // Collapsed by default on entering 'reviewing' (a multi-item plate would otherwise bury
   // "Confirmer & logger" under N fully-expanded edit cards) — except when there's exactly
   // one row (barcode scans always produce one), where the extra tap would be pure friction.
@@ -64,6 +76,21 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
   // Per-row touched-kcal guard, same purpose as Day/Habits' single-form version (see
   // foodEntryForm.ts) — indices, not row identities, so remove-row must reindex both sets.
   let rowKcalTouched = new Set<number>();
+
+  // Collapsed by default (see expandedRows' own comment for the multi-item rationale) —
+  // except a 'manual' row (no OFF/CIQUAL match, macros at zero) is left expanded regardless
+  // of N, since it needs the user's input right away. Found via a real restaurant-receipt
+  // scan where every one of 7 menu items (no OFF/CIQUAL match possible for menu-item names)
+  // fell to 'manual' — all 7 collapsed by the old blanket rule meant tapping 7 chevrons open
+  // before typing a single value.
+  function defaultExpandedRows(list: ScanRow[]): Set<number> {
+    if (list.length === 1) return new Set([0]);
+    const needsInput = list.reduce<number[]>((acc, r, i) => {
+      if (r.source === 'manual') acc.push(i);
+      return acc;
+    }, []);
+    return new Set(needsInput);
+  }
 
   function reindexAfterRemoval(removedIndex: number) {
     const shift = (set: Set<number>) => {
@@ -160,12 +187,28 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
           <div class="empty-hint" id="scan-total-macros" style="padding:0">P${fmt1(totals.protein_g)} · L${fmt1(totals.fat_g)} · G${fmt1(totals.carb_g)}</div>
         </div>
       </div>
+      ${
+        lastMode === 'receipt'
+          ? `
       <div class="card">
-        ${renderMealSlotSelectHtml('scan-mealslot', mealSlot)}
-        <label class="checkbox-label">
+        <label class="field-label">Enregistrer comme…</label>
+        <div class="sort-toggle">
+          <button class="sort-btn ${receiptSaveTarget === 'journal' ? 'active' : ''}" data-action="receipt-target" data-mode="journal">📓 Logger aujourd'hui</button>
+          <button class="sort-btn ${receiptSaveTarget === 'habits' ? 'active' : ''}" data-action="receipt-target" data-mode="habits">💾 Ajouter aux Habitudes</button>
+        </div>
+      </div>`
+          : ''
+      }
+      <div class="card">
+        ${lastMode === 'receipt' && receiptSaveTarget === 'habits' ? '' : renderMealSlotSelectHtml('scan-mealslot', mealSlot)}
+        ${
+          lastMode === 'receipt'
+            ? ''
+            : `<label class="checkbox-label">
           <input type="checkbox" id="scan-save-habit" ${saveAsHabit ? 'checked' : ''}>
           💾 Sauver ce plat comme habitude (reconnaissance rapide la prochaine fois)
-        </label>
+        </label>`
+        }
         <div class="form-actions">
           <button class="btn btn-cancel" data-action="scan-cancel">Annuler</button>
           <button class="btn btn-save" data-action="scan-confirm" ${rows.length === 0 ? 'disabled' : ''}>✅ Confirmer &amp; logger</button>
@@ -180,7 +223,9 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
         <p class="hint">Prends une photo de ton assiette — l'IA identifie les composants, tu ajustes et confirmes avant tout enregistrement.</p>
         <button class="btn-cta" data-action="scan-start">📷 Scanner une assiette</button>
         <p class="hint">Ou scanne directement le code-barres d'un produit emballé.</p>
-        <button class="btn-cta" data-action="scan-barcode-start">🔖 Scanner un code-barres</button>`;
+        <button class="btn-cta" data-action="scan-barcode-start">🔖 Scanner un code-barres</button>
+        <p class="hint">Ou scanne un ticket de caisse pour ajouter plusieurs articles d'un coup.</p>
+        <button class="btn-cta" data-action="scan-receipt-start">🧾 Scanner un ticket de caisse</button>`;
     } else if (state === 'analyzing') {
       body = `<div class="card empty-hint">Analyse de la photo en cours…</div>`;
     } else if (state === 'error') {
@@ -194,7 +239,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
   }
 
   async function startScan() {
-    const capture = await capturePlatePhoto();
+    const capture = await captureFoodPhoto();
     if (capture.status === 'cancelled') return; // user backed out — stay idle, no error shown
     lastMode = 'photo';
     if (capture.status === 'permission-denied') {
@@ -226,7 +271,44 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
         rows = await Promise.all(result.components.map(componentToRow));
       }
       state = 'reviewing';
-      expandedRows = new Set(rows.length === 1 ? [0] : []);
+      expandedRows = defaultExpandedRows(rows);
+      rowKcalTouched = new Set();
+    } catch (e) {
+      errorMsg = e instanceof MissingMistralKeyError ? e.message : `Analyse impossible (${(e as Error).message}) — vérifie la connexion et réessaie.`;
+      state = 'error';
+    }
+    // photo.base64 falls out of scope here — never stored anywhere else.
+    render();
+  }
+
+  async function startReceiptScan() {
+    const capture = await captureFoodPhoto();
+    if (capture.status === 'cancelled') return; // user backed out — stay idle, no error shown
+    lastMode = 'receipt';
+    if (capture.status === 'permission-denied') {
+      errorMsg = 'Permission appareil photo refusée — autorise l’accès dans les paramètres Android (Applis > Carbs > Autorisations) pour scanner un ticket de caisse.';
+      state = 'error';
+      render();
+      return;
+    }
+    if (capture.status === 'error') {
+      errorMsg = `Impossible d’ouvrir l’appareil photo (${capture.message}).`;
+      state = 'error';
+      render();
+      return;
+    }
+    const photo = capture.photo;
+    mealSlot = guessMealSlot(new Date());
+    receiptSaveTarget = 'journal';
+    state = 'analyzing';
+    render();
+    try {
+      const result = await analyzeReceiptPhoto(photo.base64, photo.mimeType);
+      overallNote = result.merchant_note;
+      recognizedHabitLabel = null; // no habit-recognition fast-path for receipts — not a composite dish
+      rows = await Promise.all(result.items.map(receiptItemToRow));
+      state = 'reviewing';
+      expandedRows = defaultExpandedRows(rows);
       rowKcalTouched = new Set();
     } catch (e) {
       errorMsg = e instanceof MissingMistralKeyError ? e.message : `Analyse impossible (${(e as Error).message}) — vérifie la connexion et réessaie.`;
@@ -297,6 +379,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
     });
   }
 
+
   container.addEventListener('change', (e) => {
     const target = e.target as HTMLElement;
     if (target.id === 'scan-save-habit') {
@@ -366,6 +449,10 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
       await startBarcodeScan();
       return;
     }
+    if (action === 'scan-receipt-start') {
+      await startReceiptScan();
+      return;
+    }
     if (action === 'scan-reset') {
       errorMsg = null;
       // Relaunch whichever flow errored — a bare reset to idle would cost the user
@@ -374,10 +461,17 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
         await startBarcodeScan();
       } else if (lastMode === 'photo') {
         await startScan();
+      } else if (lastMode === 'receipt') {
+        await startReceiptScan();
       } else {
         state = 'idle';
         render();
       }
+      return;
+    }
+    if (action === 'receipt-target') {
+      receiptSaveTarget = target.dataset.mode as 'journal' | 'habits';
+      render();
       return;
     }
     if (action === 'scan-cancel') {
@@ -386,6 +480,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
       overallNote = '';
       recognizedHabitLabel = null;
       saveAsHabit = false;
+      receiptSaveTarget = 'journal';
       expandedRows = new Set();
       rowKcalTouched = new Set();
       render();
@@ -454,59 +549,82 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
     }
     if (action === 'scan-confirm') {
       readRowFieldsFromDom();
-      const photoGroupId = uid();
-      const now = new Date();
-      const log = await repos.foodLog.loadToday(now);
-      const newEntries: LogEntry[] = rows.map((row) => {
-        const m = computeFoodMacros(row.per100, row.portion_g);
-        return {
-          entry_id: uid(),
-          habit_id: null,
-          label: row.label,
-          portion_g: row.portion_g,
-          per100: row.per100,
-          kcal: m.kcal,
-          protein_g: m.protein_g,
-          fat_g: m.fat_g,
-          carb_g: m.carb_g,
-          source: row.source === 'habit' ? 'manual' : (row.source as LogEntry['source']),
-          updated_at: Date.now(),
-          meal_slot: mealSlot,
-          photo_group_id: photoGroupId,
-        };
-      });
-      log.entries.push(...newEntries);
-      await repos.foodLog.saveToday(log);
 
-      if (saveAsHabit && rows.length > 0) {
-        const totalGrams = rows.reduce((s, r) => s + r.portion_g, 0);
-        const totals = rows.reduce(
-          (acc, r) => {
-            const m = computeFoodMacros(r.per100, r.portion_g);
-            return { kcal: acc.kcal + m.kcal, protein_g: acc.protein_g + m.protein_g, fat_g: acc.fat_g + m.fat_g, carb_g: acc.carb_g + m.carb_g };
-          },
-          { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0 },
-        );
-        const scale = totalGrams > 0 ? 100 / totalGrams : 0;
+      if (lastMode === 'receipt' && receiptSaveTarget === 'habits') {
+        // Each receipt line becomes its own independent, future-loggable habit — not one
+        // composite dish like the plate flow's "save as habit" checkbox below. A shopping
+        // receipt is a list of unrelated products, not a recipe. meal_slot stays null:
+        // "whenever eaten," not a forced default (see the confirmed design decision).
         const habits = await repos.habits.load();
-        habits.push({
-          id: uid(),
-          label: recognizedHabitLabel ?? overallNote.slice(0, 40) ?? 'Plat scanné',
-          off_code: null,
-          source: 'ai',
-          portion_g: totalGrams,
-          per100: {
-            kcal: totals.kcal * scale,
-            protein_g: totals.protein_g * scale,
-            fat_g: totals.fat_g * scale,
-            carb_g: totals.carb_g * scale,
-          },
-          day_type_tag: null,
-          meal_slot: null,
-          updated_at: Date.now(),
-          components: rows.map((r) => ({ label: r.label, per100: r.per100, grams: r.portion_g })),
-        });
+        for (const row of rows) {
+          habits.push({
+            id: uid(),
+            label: row.label,
+            off_code: null,
+            source: row.source === 'habit' ? 'manual' : (row.source as LogEntry['source']),
+            portion_g: row.portion_g,
+            per100: row.per100,
+            day_type_tag: null,
+            meal_slot: null,
+            updated_at: Date.now(),
+          });
+        }
         await repos.habits.save(habits);
+      } else {
+        const photoGroupId = uid();
+        const now = new Date();
+        const log = await repos.foodLog.loadToday(now);
+        const newEntries: LogEntry[] = rows.map((row) => {
+          const m = computeFoodMacros(row.per100, row.portion_g);
+          return {
+            entry_id: uid(),
+            habit_id: null,
+            label: row.label,
+            portion_g: row.portion_g,
+            per100: row.per100,
+            kcal: m.kcal,
+            protein_g: m.protein_g,
+            fat_g: m.fat_g,
+            carb_g: m.carb_g,
+            source: row.source === 'habit' ? 'manual' : (row.source as LogEntry['source']),
+            updated_at: Date.now(),
+            meal_slot: mealSlot,
+            photo_group_id: photoGroupId,
+          };
+        });
+        log.entries.push(...newEntries);
+        await repos.foodLog.saveToday(log);
+
+        if (saveAsHabit && rows.length > 0 && lastMode !== 'receipt') {
+          const totalGrams = rows.reduce((s, r) => s + r.portion_g, 0);
+          const totals = rows.reduce(
+            (acc, r) => {
+              const m = computeFoodMacros(r.per100, r.portion_g);
+              return { kcal: acc.kcal + m.kcal, protein_g: acc.protein_g + m.protein_g, fat_g: acc.fat_g + m.fat_g, carb_g: acc.carb_g + m.carb_g };
+            },
+            { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0 },
+          );
+          const scale = totalGrams > 0 ? 100 / totalGrams : 0;
+          const habits = await repos.habits.load();
+          habits.push({
+            id: uid(),
+            label: recognizedHabitLabel ?? overallNote.slice(0, 40) ?? 'Plat scanné',
+            off_code: null,
+            source: 'ai',
+            portion_g: totalGrams,
+            per100: {
+              kcal: totals.kcal * scale,
+              protein_g: totals.protein_g * scale,
+              fat_g: totals.fat_g * scale,
+              carb_g: totals.carb_g * scale,
+            },
+            day_type_tag: null,
+            meal_slot: null,
+            updated_at: Date.now(),
+            components: rows.map((r) => ({ label: r.label, per100: r.per100, grams: r.portion_g })),
+          });
+          await repos.habits.save(habits);
+        }
       }
 
       state = 'idle';
@@ -514,6 +632,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
       overallNote = '';
       recognizedHabitLabel = null;
       saveAsHabit = false;
+      receiptSaveTarget = 'journal';
       expandedRows = new Set();
       rowKcalTouched = new Set();
       render();

@@ -19,7 +19,8 @@ const ERROR_USER_CANCELLED = 'User cancelled photos app';
 
 // getPhoto() is deprecated in favor of takePhoto()+Filesystem, but it's the only API that
 // does resize (width) + quality + base64 output in one call — simpler and sufficient here.
-export async function capturePlatePhoto(): Promise<CapturePhotoResult> {
+// Generic capture, not plate-specific — shared by PhotoScanScreen's plate and receipt flows.
+export async function captureFoodPhoto(): Promise<CapturePhotoResult> {
   try {
     const checked = await Camera.checkPermissions();
     let cameraPerm = checked.camera;

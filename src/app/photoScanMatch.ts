@@ -4,7 +4,8 @@
 // unit-tested without mocking a UI.
 import type { Habit, Per100 } from '../core/types';
 import type { PlateComponent } from '../integrations/mistralFoodVision';
-import type { OffProduct } from '../integrations/openFoodFacts';
+import type { ReceiptItem } from '../integrations/mistralReceiptScan';
+import { searchOFF, type OffProduct } from '../integrations/openFoodFacts';
 import type { CiqualEntry } from '../ciqual/matcher';
 
 export type RowSource = 'habit' | 'ciqual' | 'off' | 'ai' | 'manual';
@@ -79,6 +80,73 @@ export async function componentToRow(c: PlateComponent): Promise<ScanRow> {
     source: 'ai',
     confidence: c.confidence,
     ciqualCandidates: candidates,
+    offResults: [],
+    offSearching: false,
+    offError: null,
+  };
+}
+
+// Receipt items get the OPPOSITE cascade order from componentToRow, deliberately — do not
+// "fix" one to match the other. Receipt lines are brand/shorthand-first ("YOP FRAISE 4X85G",
+// "PATES BARILLA"), a much better fit for OpenFoodFacts (a branded/packaged product database)
+// than for CIQUAL (a generic-food composition table tuned for natural descriptions like "riz
+// basmati"). OFF is tried FIRST here (auto-fired per item, unlike the plate flow's manual-only
+// OFF search — for receipts OFF is the primary expected match source, not a rare fallback).
+// CIQUAL is a plain, UNBIASED fallback: pickBestCiqualCandidate's raw/cooked reordering is
+// plate-specific reasoning ("a photographed plate is virtually always cooked food") that's
+// actively wrong for groceries — raw rice, raw chicken are legitimately what's bought. If
+// neither source hits, the row is left at zero macros for manual entry — Mistral is never
+// asked to guess nutrition for a receipt line (see mistralReceiptScan.ts), so there's no AI
+// guess to fall back to the way componentToRow falls back to Mistral's own estimate.
+export async function receiptItemToRow(item: ReceiptItem): Promise<ScanRow> {
+  let offResults: OffProduct[] = [];
+  try {
+    offResults = await searchOFF(item.label);
+  } catch {
+    offResults = [];
+  }
+  const offBest = offResults[0];
+  if (offBest) {
+    return {
+      key: uid(),
+      label: offBest.name,
+      portion_g: offBest.servingGrams ?? 100,
+      per100: offBest.per100,
+      source: 'off',
+      confidence: item.confidence,
+      ciqualCandidates: [],
+      offResults,
+      offSearching: false,
+      offError: null,
+    };
+  }
+
+  const { matchCiqual } = await import('../ciqual/matcher');
+  const ciqualCandidates = matchCiqual(item.label, 5);
+  const ciqualBest = ciqualCandidates[0];
+  if (ciqualBest) {
+    return {
+      key: uid(),
+      label: ciqualBest.label,
+      portion_g: 100,
+      per100: ciqualBest.per100,
+      source: 'ciqual',
+      confidence: item.confidence,
+      ciqualCandidates,
+      offResults: [],
+      offSearching: false,
+      offError: null,
+    };
+  }
+
+  return {
+    key: uid(),
+    label: item.label,
+    portion_g: 100,
+    per100: { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0 },
+    source: 'manual',
+    confidence: item.confidence,
+    ciqualCandidates: [],
     offResults: [],
     offSearching: false,
     offError: null,
