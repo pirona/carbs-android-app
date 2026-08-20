@@ -558,7 +558,10 @@ label.field-label {
   position: sticky;
   top: 0;
   z-index: 10;
-  padding-top: env(safe-area-inset-top);
+  /* Extra 8px on top of the inset, not just the inset alone — mirrors the same buffer used on
+     #tabs below: this WebView has been observed to under-report its safe-area insets, so a plain
+     env() alone left the bar riding up against the status bar/camera cutout on some frames. */
+  padding-top: calc(env(safe-area-inset-top) + 8px);
   background: var(--surface);
 }
 
@@ -614,7 +617,9 @@ label.field-label {
 
 #screen {
   padding: 14px;
-  padding-bottom: calc(112px + env(safe-area-inset-bottom));
+  /* Must clear #tabs' real total height: 76px row + 14px fixed buffer + env(bottom), plus a 16px
+     cushion so the last card never touches the bar. Keep in sync with #tabs/#tabs-inner. */
+  padding-bottom: calc(106px + env(safe-area-inset-bottom));
 }
 
 /* Applied to every fresh #screen clone in showTab (tap or swipe alike) — a plain hard cut felt
@@ -634,21 +639,30 @@ label.field-label {
   animation: screen-enter 180ms ease-out;
 }
 
+/* Same outer/inner split as #topbar/#topbar-inner, for the same reason: #tabs (outer) absorbs
+   the bottom safe area as padding so it never shrinks the bar's own content, #tabs-inner is the
+   actual fixed-height row. A single element carrying both a fixed height AND a safe-area
+   padding-bottom doesn't work here, because .nav-item's own explicit height (see below) made it
+   overflow straight through that padding into the reserved system-bar strip — the padding
+   existed but had zero effect, which is what let nav labels sit under Samsung's gesture bar. */
 #tabs {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 10;
-  display: flex;
-  justify-content: space-around;
-  height: 96px;
-  /* Extra 10px on top of the system inset, not just the inset alone — Samsung's 3-button/gesture
+  /* Extra 14px on top of the system inset, not just the inset alone — Samsung's 3-button/gesture
      nav bar has been observed to overlap the last few px of content even when the WebView
      reports a safe-area-inset-bottom that should have cleared it. This fixed buffer is a real
      margin against that under-report, not decorative spacing. */
-  padding-bottom: calc(env(safe-area-inset-bottom) + 10px);
+  padding-bottom: calc(env(safe-area-inset-bottom) + 14px);
   background: var(--surface);
+}
+
+#tabs-inner {
+  display: flex;
+  justify-content: space-around;
+  height: 76px;
 }
 
 .nav-item {
@@ -661,12 +675,13 @@ label.field-label {
   /* Explicit pixel height, not a percentage or align-self:stretch — both measured as no-ops on
      this WebView for a <button> (a known form-control quirk: buttons often ignore percentage
      height/stretch sizing). Without it the button collapsed to ~32px content height regardless
-     of #tabs' own height, spilling the icon above the button's box. Keep in sync with #tabs. */
-  height: 96px;
+     of #tabs-inner's own height, spilling the icon above the button's box. Keep in sync with
+     #tabs-inner. */
+  height: 76px;
   border: none;
   background: none;
   color: var(--text-muted);
-  padding: 12px 0 16px;
+  padding: 8px 0 10px;
 }
 
 .nav-icon {

@@ -104,13 +104,15 @@ app.innerHTML = `
   </header>
   <div id="screen"></div>
   <nav id="tabs">
-    ${PRIMARY_TABS.map(
-      (t) => `
-      <button class="nav-item" data-tab="${t.id}">
-        <span class="nav-icon">${t.icon()}</span>
-        <span class="nav-label">${t.label}</span>
-      </button>`,
-    ).join('')}
+    <div id="tabs-inner">
+      ${PRIMARY_TABS.map(
+        (t) => `
+        <button class="nav-item" data-tab="${t.id}">
+          <span class="nav-icon">${t.icon()}</span>
+          <span class="nav-label">${t.label}</span>
+        </button>`,
+      ).join('')}
+    </div>
   </nav>
 `;
 
