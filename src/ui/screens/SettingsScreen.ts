@@ -149,6 +149,10 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
           Données de composition nutritionnelle (scan photo) : ANSES-CIQUAL 2020,
           Licence Ouverte / Etalab.
         </p>
+        <p class="empty-hint" style="padding:0">
+          IA : uniquement Mistral (aucun autre fournisseur). Le scan photo d'assiette peut se
+          tromper sur ce qu'il identifie — vérifie toujours l'estimation avant de valider.
+        </p>
       </div>
     `;
 

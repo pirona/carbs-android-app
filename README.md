@@ -32,7 +32,8 @@ npx cap sync android  # sync web build + plugins into the Android project
 
 ## AI prompts
 
-Three optional AI features call the Mistral API directly from the app, using an API key the
+Three optional AI features call the Mistral API directly from the app — Mistral is the only AI
+provider this app talks to, no other model/vendor is involved anywhere — using an API key the
 user enters in Settings and stores encrypted on-device (Android Keystore) — never in plain text,
 and never included in the export/backup blob (unlike the Nextcloud app password, which is
 included there on an earlier explicit choice; the Mistral key must be re-entered after a
@@ -40,6 +41,10 @@ wipe/reinstall or a restore from backup). Each call receives only what the task 
 text, one photo, or nutrition numbers already computed by the app — never account data or
 history. In every case the AI's output is a suggestion: the user reviews and can edit it, and
 nothing is ever saved automatically.
+
+The plate-photo scan in particular is not always reliable — vision models can misidentify what's
+on the photo (see `PhotoScanScreen`'s human-confirmation step, never an auto-save). Treat its
+output as a rough starting point to correct, not a trustworthy reading.
 
 The exact request sent for each feature is committed to this repo as source code, so the prompt
 below is never just a description — the file is the source of truth:
