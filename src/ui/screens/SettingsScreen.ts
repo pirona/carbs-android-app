@@ -8,6 +8,7 @@ import type { ImportRepos } from '../../migration/importExport';
 import { DEFAULT_THEME, type ThemeMode, type ThemeRepo, type ThemeSettings } from '../../storage/repos/themeRepo';
 import { DEFAULT_NEXTCLOUD, type NextcloudAutoBackupMode, type NextcloudSettings } from '../../storage/repos/nextcloudRepo';
 import { backupToNextcloud, restoreFromNextcloud, getNextcloudPassword, setNextcloudPassword } from '../../integrations/nextcloudWebdav';
+import { getMistralApiKey, setMistralApiKey, testMistralConnection } from '../../integrations/mistralClient';
 import { buildExportBlob } from '../../migration/exportDump';
 import { runImport } from '../../migration/importExport';
 import { applyTheme } from '../theme';
@@ -41,6 +42,9 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
   let nextcloud: NextcloudSettings = DEFAULT_NEXTCLOUD;
   let ncHasPassword = false;
   let ncRestorePreviewRaw: string | null = null;
+  // Deliberately not reloaded in the post-restore reload block below (see nc-restore-confirm) —
+  // the Mistral key is guaranteed unaffected by any import, since it's never in the blob.
+  let mistralHasKey = false;
 
   function render() {
     container.innerHTML = `
@@ -122,6 +126,16 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
           <button class="btn-cta" data-action="nc-restore-confirm">✅ Confirmer la restauration</button>
         </div>
         <div class="msg" id="nc-msg"></div>
+      </div>
+
+      <div class="card">
+        <h2>🤖 IA (Mistral)</h2>
+        <label class="field-label">Clé API ${mistralHasKey ? '(déjà enregistrée — laisser vide pour la garder)' : ''}</label>
+        <input type="password" id="mistral-key" placeholder="${mistralHasKey ? '••••••••' : 'clé API Mistral (console.mistral.ai)'}" autocomplete="off">
+        <p class="empty-hint" style="padding:0">Stockée chiffrée (Android Keystore), jamais en clair sur disque, jamais incluse dans les sauvegardes.</p>
+        <button class="btn-cta" data-action="mistral-save">💾 Enregistrer la clé</button>
+        <button class="btn-secondary" data-action="mistral-test">🔌 Tester la connexion</button>
+        <div class="msg" id="mistral-msg"></div>
       </div>
 
       <div class="card">
@@ -272,6 +286,47 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
       return;
     }
 
+    const mistralMsgEl = () => container.querySelector<HTMLDivElement>('#mistral-msg')!;
+
+    if ((e.target as HTMLElement).closest('[data-action="mistral-save"]')) {
+      const key = container.querySelector<HTMLInputElement>('#mistral-key')!.value.trim();
+      const msgEl = mistralMsgEl();
+      if (key) {
+        await setMistralApiKey(key);
+        mistralHasKey = true;
+        msgEl.className = 'msg ok';
+        msgEl.textContent = '✓ Clé enregistrée';
+        render();
+      } else {
+        msgEl.className = 'msg ok';
+        msgEl.textContent = mistralHasKey ? '✓ Clé conservée (champ vide)' : '';
+      }
+      return;
+    }
+
+    if ((e.target as HTMLElement).closest('[data-action="mistral-test"]')) {
+      const msgEl = mistralMsgEl();
+      const typed = container.querySelector<HTMLInputElement>('#mistral-key')!.value.trim();
+      const key = typed || (await getMistralApiKey());
+      if (!key) {
+        msgEl.className = 'msg error';
+        msgEl.textContent = 'Aucune clé à tester — saisis-en une d’abord.';
+        return;
+      }
+      msgEl.className = 'msg';
+      msgEl.textContent = 'Test en cours…';
+      const result = await testMistralConnection(key);
+      msgEl.className = result.ok ? 'msg ok' : 'msg error';
+      if (result.ok) {
+        msgEl.textContent = '✓ clé valide';
+      } else if (result.message === 'HTTP 401') {
+        msgEl.textContent = '✗ 401 — clé invalide';
+      } else {
+        msgEl.textContent = `✗ ${result.message}`;
+      }
+      return;
+    }
+
     const target = (e.target as HTMLElement).closest<HTMLElement>('[data-action="save-profile"]');
     if (!target) return;
     const msgEl = container.querySelector<HTMLDivElement>('#settings-msg')!;
@@ -302,6 +357,7 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
     theme = await repos.theme.load();
     nextcloud = await repos.nextcloud.load();
     ncHasPassword = !!(await getNextcloudPassword());
+    mistralHasKey = !!(await getMistralApiKey());
     render();
   })();
 }

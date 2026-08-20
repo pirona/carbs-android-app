@@ -3,7 +3,7 @@
 // from PhotoScanScreen's DOM/event code so the cascade and fast-path recognition can be
 // unit-tested without mocking a UI.
 import type { Habit, Per100 } from '../core/types';
-import type { PlateComponent } from '../integrations/n8nFoodVision';
+import type { PlateComponent } from '../integrations/mistralFoodVision';
 import type { OffProduct } from '../integrations/openFoodFacts';
 import type { CiqualEntry } from '../ciqual/matcher';
 

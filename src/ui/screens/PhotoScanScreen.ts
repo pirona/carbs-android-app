@@ -10,7 +10,8 @@ import type { LogEntry, MealSlot } from '../../core/types';
 import type { HabitsRepo } from '../../storage/repos/habitsRepo';
 import type { FoodLogRepo } from '../../storage/repos/foodLogRepo';
 import { capturePlatePhoto } from '../../integrations/camera';
-import { analyzePlatePhoto } from '../../integrations/n8nFoodVision';
+import { analyzePlatePhoto } from '../../integrations/mistralFoodVision';
+import { MissingMistralKeyError } from '../../integrations/mistralClient';
 import { lookupOFF, scanBarcode } from '../../integrations/barcodeScan';
 import { searchOFF } from '../../integrations/openFoodFacts';
 import { componentToRow, habitToRows, tryRecognizeHabit, type RowSource, type ScanRow } from '../../app/photoScanMatch';
@@ -228,7 +229,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
       expandedRows = new Set(rows.length === 1 ? [0] : []);
       rowKcalTouched = new Set();
     } catch (e) {
-      errorMsg = `Analyse impossible (${(e as Error).message}) — vérifie la connexion et réessaie.`;
+      errorMsg = e instanceof MissingMistralKeyError ? e.message : `Analyse impossible (${(e as Error).message}) — vérifie la connexion et réessaie.`;
       state = 'error';
     }
     // photo.base64 falls out of scope here — never stored anywhere else.

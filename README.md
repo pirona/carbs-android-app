@@ -32,20 +32,31 @@ npx cap sync android  # sync web build + plugins into the Android project
 
 ## AI prompts
 
-Three optional AI features call Mistral through dedicated webhooks on a self-hosted n8n
-instance. Each receives only what the task needs — raw text, one photo, or nutrition numbers
-already computed by the app — never account data or history. In every case the AI's output is a
-suggestion: the user reviews and can edit it, and nothing is ever saved automatically.
+Three optional AI features call the Mistral API directly from the app, using an API key the
+user enters in Settings and stores encrypted on-device (Android Keystore) — never in plain text,
+and never included in the export/backup blob (unlike the Nextcloud app password, which is
+included there on an earlier explicit choice; the Mistral key must be re-entered after a
+wipe/reinstall or a restore from backup). Each call receives only what the task needs — raw
+text, one photo, or nutrition numbers already computed by the app — never account data or
+history. In every case the AI's output is a suggestion: the user reviews and can edit it, and
+nothing is ever saved automatically.
 
-The exact request sent to each workflow is committed to this repo as an importable n8n export,
-so the prompt below is never just a description — the JSON file is the source of truth:
+The exact request sent for each feature is committed to this repo as source code, so the prompt
+below is never just a description — the file is the source of truth:
 
-- [`n8n_food_parse_workflow.json`](n8n_food_parse_workflow.json) — natural-language food entry
-  (`/food-parse`)
-- [`n8n_food_vision_workflow.json`](n8n_food_vision_workflow.json) — photo-of-a-plate scan
-  (`/food-vision`)
-- [`n8n_carb_advice_workflow.json`](n8n_carb_advice_workflow.json) — caloric-deficit advice on a
-  fully-logged past day (`/carb-advice`)
+- [`src/integrations/mistralFoodParse.ts`](src/integrations/mistralFoodParse.ts) —
+  natural-language food entry
+- [`src/integrations/mistralFoodVision.ts`](src/integrations/mistralFoodVision.ts) —
+  photo-of-a-plate scan
+- [`src/integrations/mistralCarbAdvice.ts`](src/integrations/mistralCarbAdvice.ts) —
+  caloric-deficit advice on a fully-logged past day
+
+These three features used to relay through webhooks on a self-hosted n8n instance instead of
+calling Mistral directly. The original n8n workflow exports are kept in the repo as historical
+reference — [`n8n_food_parse_workflow.json`](n8n_food_parse_workflow.json),
+[`n8n_food_vision_workflow.json`](n8n_food_vision_workflow.json),
+[`n8n_carb_advice_workflow.json`](n8n_carb_advice_workflow.json) — but are disabled on the n8n
+instance and no longer used by the app.
 
 ### Food Parse — natural-language food entry
 
@@ -87,14 +98,14 @@ Message: { role: "user", content: [
 ] }
 ```
 
-The photo is sent to Mistral for that one inference call and is never stored server-side
-(`saveDataSuccessExecution: "none"` on the workflow) or anywhere else.
+The photo is sent to Mistral for that one inference call and is never stored anywhere — the
+base64 string is a local variable, discarded as soon as the call resolves or fails.
 
 ### Carb Advice — caloric-deficit advice
 
 Model `mistral-large-latest`, temperature 0.3, `response_format: json_object`. Unlike the two
 tool-calling flows above, this one gets a full system prompt (verbatim, from
-`n8n_carb_advice_workflow.json`'s "Build Prompt" node):
+`mistralCarbAdvice.ts` — ported unchanged from the retired n8n workflow's "Build Prompt" node):
 
 > Tu es un assistant nutrition qui donne des conseils de déficit calorique fondés EXCLUSIVEMENT
 > sur les recommandations d'organismes de santé publique reconnus scientifiquement :
@@ -139,5 +150,5 @@ totals, per-meal breakdown; the model never recomputes anything itself):
 > jour (carb cycling) et de la répartition par repas (petit_dej / dejeuner / diner / collation =
 > hors-repas).
 
-This is the literal string built by n8n's "Build Prompt" node — this repo's copy of the workflow
-was verified byte-identical to the one actually running on the instance.
+This is the literal string in `mistralCarbAdvice.ts`, ported unchanged from n8n's former "Build
+Prompt" node (verified byte-identical at the time of the port).

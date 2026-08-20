@@ -17,7 +17,8 @@ import type { DayHistoryRepo } from '../../storage/repos/dayHistoryRepo';
 import type { FoodLogHistoryRepo } from '../../storage/repos/foodLogHistoryRepo';
 import type { ProfileRepo } from '../../storage/repos/profileRepo';
 import { calcMacros } from '../../core/calc/macros';
-import { fetchCarbAdvice, type CarbAdviceMacros, type CarbAdviceRequest, type CarbAdviceResult } from '../../integrations/n8nCarbAdvice';
+import { fetchCarbAdvice, type CarbAdviceMacros, type CarbAdviceRequest, type CarbAdviceResult } from '../../integrations/mistralCarbAdvice';
+import { MissingMistralKeyError } from '../../integrations/mistralClient';
 import { attachMealSlotDrag } from '../mealSlotDrag';
 import { iconDragHandle } from '../icons';
 import { escapeHtml, fmt1 } from '../util';
@@ -189,7 +190,7 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
     try {
       advice = await fetchCarbAdvice(payload);
     } catch (err) {
-      adviceError = `Conseil impossible (${(err as Error).message}) — réessaie plus tard.`;
+      adviceError = err instanceof MissingMistralKeyError ? err.message : `Conseil impossible (${(err as Error).message}) — réessaie plus tard.`;
     }
     adviceLoading = false;
     render();

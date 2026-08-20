@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { componentToRow, habitToRows, tryRecognizeHabit } from '../photoScanMatch';
 import type { Habit } from '../../core/types';
-import type { PlateComponent } from '../../integrations/n8nFoodVision';
+import type { PlateComponent } from '../../integrations/mistralFoodVision';
 
 function component(overrides: Partial<PlateComponent> & { label: string }): PlateComponent {
   return {
