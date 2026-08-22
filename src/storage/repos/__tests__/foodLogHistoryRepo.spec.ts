@@ -76,4 +76,22 @@ describe('FoodLogHistoryRepo', () => {
     const history = await repo.load();
     expect(history[0].entries[0].meal_slot).toBe('collation');
   });
+
+  it('appends a forgotten entry to an already-archived day', async () => {
+    const repo = new FoodLogHistoryRepo(new InMemoryStorageAdapter());
+    await repo.archiveDay('2026-08-10', [ENTRY]);
+    const missed: LogEntry = { ...ENTRY, entry_id: 'e2', label: 'Riz', meal_slot: 'diner' };
+    await repo.addEntry('2026-08-10', missed);
+    const history = await repo.load();
+    expect(history).toHaveLength(1);
+    expect(history[0].entries.map((e) => e.entry_id)).toEqual(['e1', 'e2']);
+  });
+
+  it('creates the day when adding an entry to a date not yet archived', async () => {
+    const repo = new FoodLogHistoryRepo(new InMemoryStorageAdapter());
+    await repo.addEntry('2026-08-12', ENTRY);
+    const history = await repo.load();
+    expect(history).toHaveLength(1);
+    expect(history[0]).toEqual({ date: '2026-08-12', entries: [ENTRY] });
+  });
 });

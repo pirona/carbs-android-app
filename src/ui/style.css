@@ -499,6 +499,18 @@ label.field-label {
   margin-bottom: 3px;
 }
 
+/* Cautionary tone, distinct from .ai-banner's — flags a partially-logged day on the Conseils
+   screen (see assessCompleteness) before/alongside a conseil, not the conseil's own content. */
+.completeness-banner {
+  background: color-mix(in srgb, var(--medium) 14%, transparent);
+  border: 1px solid var(--medium);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .footer {
   text-align: center;
   margin-top: 4px;

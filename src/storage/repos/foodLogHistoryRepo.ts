@@ -55,4 +55,18 @@ export class FoodLogHistoryRepo {
     entry.meal_slot = mealSlot;
     await this.save(all);
   }
+
+  // Appends a forgotten entry to an already-archived day (e.g. Conseils screen's "add missed
+  // food" flow, for a partially-logged past day) — creates the day if it doesn't exist yet,
+  // though in practice the Conseils screen only ever calls this on a day it already loaded.
+  async addEntry(date: string, entry: LogEntry): Promise<void> {
+    const all = await this.load();
+    const dayEntry = all.find((e) => e.date === date);
+    if (dayEntry) {
+      dayEntry.entries.push(entry);
+      await this.save(all);
+    } else {
+      await this.save([{ date, entries: [entry] }, ...all]);
+    }
+  }
 }

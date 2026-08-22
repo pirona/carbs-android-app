@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import type { DayType, MealSlot } from '../core/types';
+import type { AdviceCompleteness } from '../core/calc/adviceCompleteness';
 import { callMistralChat, extractJsonModeContent, requireMistralApiKey } from './mistralClient';
 
 // Direct client call to api.mistral.ai — replaces the retired n8n webhook relay. System
@@ -38,6 +39,10 @@ export interface CarbAdviceRequest {
   target: CarbAdviceMacros;
   actual: CarbAdviceMacros;
   meals: Record<MealSlot, CarbAdviceMealItem[]>;
+  // Whether the day is actually representative (≥3 of 4 meal slots logged + activity known) —
+  // ConseilsScreen sends this even on a day the user chose to analyze anyway despite the gap,
+  // so the model hedges instead of treating a partial log as the full day.
+  data_completeness: AdviceCompleteness;
 }
 
 export interface CarbAdviceResult {
@@ -59,6 +64,7 @@ RÈGLES STRICTES, à respecter sans exception :
 4. Réponds en français, tutoiement, ton direct et concis (4 à 8 phrases maximum). Pas de préambule ni de disclaimer générique.
 5. Les données fournies reflètent le programme de carb cycling de l'utilisateur (jours HIGH/MEDIUM/LOW/PLAISIR avec des cibles de glucides différentes selon le type de jour, glucides jamais sous 130g/jour). Commente explicitement si l'apport réel du jour (total et par repas) est cohérent avec la cible de ce type de jour précis, pas seulement le déficit calorique global.
 6. Termine par la liste des organismes dont tu t'es réellement inspiré pour CETTE réponse précise (pas une liste générique donnée par défaut) dans le champ "sources" — liste vide si le conseil ne repose que sur des principes généraux non attribuables à un organisme précis.
+7. Le champ "data_completeness" indique si la journée fournie est réellement représentative (meals_logged sur meals_total repas renseignés, has_activity = activité connue ou non). Si complete=false, commence ta réponse en signalant explicitement et brièvement cette limite (ex: seulement X repas sur 4 loggés, et/ou activité inconnue) avant de commenter les chiffres — les totaux fournis peuvent être sous-estimés, ne les présente jamais comme la consommation réelle et complète de la journée.
 
 Réponds UNIQUEMENT en JSON strict, sans aucun texte hors JSON, au format exact :
 {"advice": "...", "sources": ["..."]}`;

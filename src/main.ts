@@ -8,6 +8,8 @@ import { SportRepo } from './storage/repos/sportRepo';
 import { HabitsRepo } from './storage/repos/habitsRepo';
 import { FoodLogRepo } from './storage/repos/foodLogRepo';
 import { FoodLogHistoryRepo } from './storage/repos/foodLogHistoryRepo';
+import { CarbAdviceHistoryRepo } from './storage/repos/carbAdviceHistoryRepo';
+import { CarbPeriodBilanHistoryRepo } from './storage/repos/carbPeriodBilanHistoryRepo';
 import { ProfileRepo } from './storage/repos/profileRepo';
 import { renderDayScreen, type DayScreenRepos } from './ui/screens/DayScreen';
 import { renderProgressScreen, type ProgressScreenRepos } from './ui/screens/ProgressScreen';
@@ -34,6 +36,8 @@ const sport = new SportRepo(storage);
 const habits = new HabitsRepo(storage);
 const foodLog = new FoodLogRepo(storage);
 const foodLogHistory = new FoodLogHistoryRepo(storage);
+const carbAdviceHistory = new CarbAdviceHistoryRepo(storage);
+const carbPeriodBilanHistory = new CarbPeriodBilanHistoryRepo(storage);
 const profile = new ProfileRepo(storage);
 const theme = new ThemeRepo(storage);
 const nextcloud = new NextcloudRepo(storage);
@@ -62,7 +66,7 @@ const progressRepos: ProgressScreenRepos = { dayHistory, carbHistory, plaisir, s
 const weekRepos: WeekScreenRepos = { dayHistory, plaisir, sport, profile };
 const settingsRepos: SettingsScreenRepos = { dayHistory, carbHistory, plaisir, sport, habits, foodLog, foodLogHistory, profile, theme, nextcloud };
 const photoScanRepos: PhotoScanScreenRepos = { habits, foodLog };
-const conseilsRepos: ConseilsScreenRepos = { dayHistory, foodLogHistory, profile };
+const conseilsRepos: ConseilsScreenRepos = { dayHistory, foodLogHistory, carbAdviceHistory, carbPeriodBilanHistory, profile };
 
 type TabId = 'day' | 'progress' | 'scan' | 'week' | 'habits' | 'settings' | 'conseils';
 interface TabDef {
