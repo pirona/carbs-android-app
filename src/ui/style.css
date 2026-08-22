@@ -359,6 +359,10 @@ label.field-label {
   align-items: center;
   margin-bottom: 10px;
   gap: 8px;
+  /* Explicit, not just inherited — a <button class="list-header"> (history-section toggles)
+     does NOT inherit color from its ancestor by default like a <div> would, so its text falls
+     back to the platform's default button text color instead of the app's dark-mode palette. */
+  color: var(--text);
 }
 
 .sort-toggle {

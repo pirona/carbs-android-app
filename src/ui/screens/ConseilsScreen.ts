@@ -117,9 +117,10 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
 
   // "Add a forgotten meal" on the flagged past day — mirrors DayScreen's log form (same shared
   // foodEntryForm.ts helpers) but writes into FoodLogHistoryRepo for an archived date instead
-  // of today's FoodLogRepo. Only surfaced while the day is still incomplete (see render()) —
-  // sport/activity for a past day is already correctable from the Semainier (WeekScreen); this
-  // closes the same gap for food.
+  // of today's FoodLogRepo. Always available on the day card, not just while incomplete —
+  // adding one item can flip the day to "complete" (see assessCompleteness), and the user may
+  // still have more than one forgotten item to log. Sport/activity for a past day is already
+  // correctable from the Semainier (WeekScreen); this closes the same gap for food.
   interface MissedEntryFormState {
     step: 'search' | 'confirm';
     query: string;
@@ -462,7 +463,7 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
           }
         </div>
         ${MEAL_SLOT_ORDER.map((slot) => mealSectionHtml(slot, groups[slot])).join('')}
-        ${completeness && !completeness.complete ? addMissedEntrySectionHtml(groups) : ''}
+        ${addMissedEntrySectionHtml(groups)}
         ${completeness && !completeness.complete ? completenessBannerHtml(completeness) : ''}
         ${adviceActionHtml()}
         ${adviceResultHtml()}
