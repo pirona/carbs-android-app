@@ -86,9 +86,9 @@ export function renderWeekScreen(container: HTMLElement, repos: WeekScreenRepos)
         <tr class="${isToday ? 'today-row' : ''}">
           <td style="white-space:nowrap;${isToday ? 'color:var(--text);font-weight:700' : 'color:var(--text-muted)'}">
             ${DOW[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}
-            ${isToday ? '<span style="color:var(--medium);font-size:9px"> auj.</span>' : ''}
+            ${isToday ? '<span style="color:var(--medium);font-size:10px"> auj.</span>' : ''}
           </td>
-          <td><span style="color:${COLOR[type]};font-weight:700;font-size:10px">${BADGE[type]}</span></td>
+          <td><span style="color:${COLOR[type]};font-weight:700;font-size:11px">${BADGE[type]}</span></td>
           <td style="text-align:center">
             <button class="icon-btn" style="opacity:${plaisirLevel ? '1' : '0.3'}" data-action="cycle-plaisir" data-date="${ds}">
               ${plaisirLevel ? PLAISIR_LEVELS[plaisirLevel].icon : '🍺'}

@@ -13,6 +13,7 @@ import type { ProfileRepo } from '../../storage/repos/profileRepo';
 import type { HealthConnectAdapter, HealthConnectSignals } from '../../integrations/healthConnect/HealthConnectAdapter';
 import { computeFoodMacros } from '../../core/calc/food';
 import { groupByMeal, foodTotals } from '../../core/calc/mealGroup';
+import { filterHabitsByQuery } from '../../core/calc/habitSearch';
 import { type OffProduct } from '../../integrations/openFoodFacts';
 import {
   type FoodEntryPrefill,
@@ -28,7 +29,7 @@ import { guessMealSlot } from '../../core/calc/date';
 import type { MealSlot } from '../../core/types';
 import { escapeHtml, fmt1, attachLongPress } from '../util';
 import { attachMealSlotDrag } from '../mealSlotDrag';
-import { iconAdd, iconRestaurant, iconDragHandle } from '../icons';
+import { iconAdd, iconRestaurant, iconDragHandle, iconSearch } from '../icons';
 
 export interface DayScreenRepos extends DayTrackingRepos {
   habits: HabitsRepo;
@@ -61,6 +62,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
   let snapshot: DaySnapshot | null = null;
   let habits: Habit[] = [];
   let habitSortMode: HabitSortMode = 'alpha';
+  let habitFilterQuery = '';
   let logEntries: LogEntry[] = [];
   let logForm: LogFormState | null = null;
   // Same "touched" guard as HabitsScreen.ts's #f-kcal — once the user edits #log-f-kcal
@@ -123,22 +125,50 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       <div class="form-block empty-hint" style="padding-bottom:0">📱 Health Connect : ${stepsLabel}</div>`;
   }
 
-  function habitChips(): string {
-    const sorted = [...habits].sort((a, b) =>
+  function sortedHabits(): Habit[] {
+    return [...habits].sort((a, b) =>
       habitSortMode === 'recent' ? (b.updated_at || 0) - (a.updated_at || 0) : a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }),
     );
-    if (sorted.length === 0) return '';
+  }
+
+  // The library screen (Habitudes tab) already lists every habit — repeating that whole wall of
+  // chips here just to log one made scanning it the actual bottleneck the user hit. So this list
+  // stays empty until a query is typed: the search box is the entry point, not a filter bolted
+  // onto an always-visible list.
+  //
+  // Extracted so a keystroke in #habit-chip-search can swap just this subtree (see
+  // updateHabitChipList) instead of the whole render() — recreating the <input> itself on every
+  // keystroke would drop its focus/cursor (see mémoire projet 2026-08-20: an earlier live-search
+  // attempt built on full re-render + focus-preservation never worked reliably on this WebView).
+  function habitChipListHtml(): string {
+    if (!habitFilterQuery.trim()) return '';
+    const filtered = filterHabitsByQuery(sortedHabits(), habitFilterQuery);
+    if (filtered.length === 0) {
+      return `<div class="empty-hint">Aucune habitude ne correspond à « ${escapeHtml(habitFilterQuery)} ».</div>`;
+    }
+    return `<div class="chip-row">${filtered.map((h) => `<button class="chip" data-action="log-habit" data-id="${h.id}">${escapeHtml(h.label)}</button>`).join('')}</div>`;
+  }
+
+  function updateHabitChipList() {
+    const body = container.querySelector<HTMLElement>('#habit-chip-list');
+    if (body) body.innerHTML = habitChipListHtml();
+  }
+
+  function habitChips(): string {
+    if (habits.length === 0) return '';
     return `
-      <div class="list-header" style="margin-bottom:6px">
-        <div class="empty-hint" style="padding:0">Habitudes — tap pour logger</div>
+      <div class="list-header">
+        <div class="empty-hint" style="padding:0">Habitudes — rechercher pour logger</div>
         <div class="sort-toggle">
           <button class="sort-btn ${habitSortMode === 'alpha' ? 'active' : ''}" data-action="habit-sort" data-mode="alpha">A→Z</button>
           <button class="sort-btn ${habitSortMode === 'recent' ? 'active' : ''}" data-action="habit-sort" data-mode="recent">Récent</button>
         </div>
       </div>
-      <div class="chip-row">
-        ${sorted.map((h) => `<button class="chip" data-action="log-habit" data-id="${h.id}">${escapeHtml(h.label)}</button>`).join('')}
-      </div>`;
+      <div class="search-filter">
+        <span class="search-filter-icon">${iconSearch()}</span>
+        <input type="text" id="habit-chip-search" placeholder="Rechercher une habitude…" value="${escapeHtml(habitFilterQuery)}">
+      </div>
+      <div id="habit-chip-list">${habitChipListHtml()}</div>`;
   }
 
   function logFormHtml(): string {
@@ -202,7 +232,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
   function mealSectionHtml(slot: MealSlot, entries: LogEntry[]): string {
     return `
       <div class="form-block" data-meal-section="${slot}">
-        <div class="list-header"><span style="font-size:12px;font-weight:600">${MEAL_SLOT_LABEL[slot]}</span></div>
+        <div class="list-header"><span style="font-size:13px;font-weight:600">${MEAL_SLOT_LABEL[slot]}</span></div>
         ${
           entries.length === 0
             ? '<div class="empty-hint">Rien ici.</div>'
@@ -296,7 +326,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
           ${macroBars(snap.macros)}
         `
             : `
-          <div style="text-align:center;font-size:36px;margin:8px 0 4px">🍺</div>
+          <div style="text-align:center;font-size:40px;margin:10px 0 6px">🍺</div>
           <div style="text-align:center;color:var(--plaisir);font-weight:700">Jour plaisir déclaré</div>
           <div class="empty-hint" style="text-align:center">${escapeHtml(snap.dayType.source)}</div>
         `
@@ -597,6 +627,11 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
   // for the kcal-from-macros recompute to actually feel live while typing.
   container.addEventListener('input', (e) => {
     const target = e.target as HTMLInputElement;
+    if (target.id === 'habit-chip-search') {
+      habitFilterQuery = target.value;
+      updateHabitChipList();
+      return;
+    }
     if (logForm?.step !== 'confirm') return;
     handleFoodEntryKcalGuardInput(container, 'log-f', target.id, logKcalTouched);
   });

@@ -161,7 +161,7 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
     const totals = foodTotals(entries);
     return `
       <div class="form-block" data-meal-section="${slot}">
-        <div class="list-header"><span style="font-size:12px;font-weight:600">${MEAL_SLOT_LABEL[slot]}</span><span class="empty-hint" style="padding:0">${fmt(totals.kcal)} kcal</span></div>
+        <div class="list-header"><span style="font-size:13px;font-weight:600">${MEAL_SLOT_LABEL[slot]}</span><span class="empty-hint" style="padding:0">${fmt(totals.kcal)} kcal</span></div>
         ${
           entries.length === 0
             ? '<div class="empty-hint">Rien ici.</div>'
@@ -281,10 +281,10 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
     return `
       <div class="form-block">
         <div class="list-header">
-          <span style="font-size:13px;font-weight:600">${formatDateLong(entry.date)}</span>
+          <span style="font-size:14px;font-weight:600">${formatDateLong(entry.date)}</span>
           <span class="empty-hint" style="padding:0">${entry.completeness.complete ? '✓ complet' : `⚠ ${entry.completeness.meals_logged}/${entry.completeness.meals_total} repas`}</span>
         </div>
-        <div style="white-space:pre-wrap;font-size:13px">${escapeHtml(entry.advice)}</div>
+        <div style="white-space:pre-wrap;font-size:14px">${escapeHtml(entry.advice)}</div>
         ${
           entry.sources.length > 0
             ? `<div class="empty-hint" style="padding-top:4px">Sources : ${entry.sources.map((s) => escapeHtml(s)).join(' · ')}</div>`
@@ -298,7 +298,7 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
     return `
       <div class="card" style="margin-top:10px">
         <button class="list-header" style="width:100%;background:none;border:none;padding:0" data-action="toggle-history">
-          <span style="font-size:14px;font-weight:600">📜 Historique des conseils (${history.length})</span>
+          <span style="font-size:15px;font-weight:600">📜 Historique des conseils (${history.length})</span>
           <span class="row-chevron${historyExpanded ? ' expanded' : ''}">▸</span>
         </button>
         ${historyExpanded ? [...history].sort((a, b) => b.date.localeCompare(a.date)).map(historyEntryHtml).join('') : ''}
@@ -399,10 +399,10 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
     return `
       <div class="form-block">
         <div class="list-header">
-          <span style="font-size:13px;font-weight:600">${formatDateShort(entry.start_date)} → ${formatDateShort(entry.end_date)}</span>
+          <span style="font-size:14px;font-weight:600">${formatDateShort(entry.start_date)} → ${formatDateShort(entry.end_date)}</span>
           <span class="empty-hint" style="padding:0">${entry.completeness.complete ? '✓ complet' : `⚠ ${entry.completeness.tracked_days}/${entry.completeness.total_days}j`}</span>
         </div>
-        <div style="white-space:pre-wrap;font-size:13px">${escapeHtml(entry.bilan)}</div>
+        <div style="white-space:pre-wrap;font-size:14px">${escapeHtml(entry.bilan)}</div>
         ${
           entry.sources.length > 0
             ? `<div class="empty-hint" style="padding-top:4px">Sources : ${entry.sources.map((s) => escapeHtml(s)).join(' · ')}</div>`
@@ -416,7 +416,7 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
     return `
       <div class="card" style="margin-top:10px">
         <button class="list-header" style="width:100%;background:none;border:none;padding:0" data-action="toggle-period-history">
-          <span style="font-size:14px;font-weight:600">📜 Historique des bilans (${periodHistory.length})</span>
+          <span style="font-size:15px;font-weight:600">📜 Historique des bilans (${periodHistory.length})</span>
           <span class="row-chevron${periodHistoryExpanded ? ' expanded' : ''}">▸</span>
         </button>
         ${periodHistoryExpanded ? [...periodHistory].sort((a, b) => b.start_date.localeCompare(a.start_date)).map(periodHistoryEntryHtml).join('') : ''}

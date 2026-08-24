@@ -15,8 +15,10 @@ import {
   interpretFoodTextWithAI,
 } from '../forms/foodEntryForm';
 import { computeFoodMacros } from '../../core/calc/food';
+import { filterHabitsByQuery } from '../../core/calc/habitSearch';
 import { MEAL_SLOT_LABEL } from '../../core/types';
 import { escapeHtml, fmt1, attachLongPress } from '../util';
+import { iconSearch } from '../icons';
 
 interface FormState {
   mode: 'add' | 'edit';
@@ -48,6 +50,7 @@ function sortHabits(list: Habit[], mode: HabitSortMode): Habit[] {
 export function renderHabitsScreen(container: HTMLElement, repos: { habits: HabitsRepo }): void {
   let habits: Habit[] = [];
   let sortMode: HabitSortMode = 'alpha';
+  let filterQuery = '';
   let form: FormState | null = null;
   // True once the user has directly edited #f-kcal in the open form — once touched, macro
   // edits stop overwriting it (a printed label's kcal can legitimately differ slightly from
@@ -125,8 +128,33 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
     });
   }
 
+  // Extracted so a keystroke in #habit-search can swap just this subtree (see
+  // updateHabitListBody) instead of the whole render() — recreating the <input> itself on every
+  // keystroke would drop its focus/cursor (see mémoire projet 2026-08-20: an earlier live-search
+  // attempt built on full re-render + focus-preservation never worked reliably on this WebView).
+  function habitListBodyHtml(sortedAll: Habit[], filtered: Habit[]): string {
+    if (sortedAll.length === 0) return '<div class="empty-hint">Aucune habitude enregistrée.</div>';
+    if (filtered.length === 0) return `<div class="empty-hint">Aucun résultat pour « ${escapeHtml(filterQuery)} ».</div>`;
+    return filtered.map(habitRow).join('');
+  }
+
+  function footerText(total: number, visible: number): string {
+    if (filterQuery.trim() && visible !== total) return `${visible} / ${total} habitude${total > 1 ? 's' : ''}`;
+    return `${total} habitude${total > 1 ? 's' : ''} au total`;
+  }
+
+  function updateHabitListBody() {
+    const sortedAll = sortHabits(habits, sortMode);
+    const filtered = filterHabitsByQuery(sortedAll, filterQuery);
+    const body = container.querySelector<HTMLElement>('#habit-list-body');
+    if (body) body.innerHTML = habitListBodyHtml(sortedAll, filtered);
+    const footer = container.querySelector<HTMLElement>('#habits-footer');
+    if (footer) footer.textContent = footerText(sortedAll.length, filtered.length);
+  }
+
   function render() {
-    const sorted = sortHabits(habits, sortMode);
+    const sortedAll = sortHabits(habits, sortMode);
+    const filtered = filterHabitsByQuery(sortedAll, filterQuery);
     container.innerHTML = `
       <p class="hint">Bibliothèque personnelle — données réelles via OpenFoodFacts ou saisie manuelle.</p>
       <div class="card">
@@ -137,10 +165,18 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
             <button class="sort-btn ${sortMode === 'recent' ? 'active' : ''}" data-action="sort" data-mode="recent">Récent</button>
           </div>
         </div>
-        ${sorted.length === 0 ? '<div class="empty-hint">Aucune habitude enregistrée.</div>' : sorted.map(habitRow).join('')}
+        ${
+          sortedAll.length > 0
+            ? `<div class="search-filter">
+                <span class="search-filter-icon">${iconSearch()}</span>
+                <input type="text" id="habit-search" placeholder="Rechercher une habitude…" value="${escapeHtml(filterQuery)}">
+              </div>`
+            : ''
+        }
+        <div id="habit-list-body">${habitListBodyHtml(sortedAll, filtered)}</div>
         ${form ? (form.step === 'search' ? formSearchStep(form) : formConfirmStep(form)) : '<button class="btn btn-add" data-action="add">+ Ajouter une habitude</button>'}
       </div>
-      <div class="footer">${habits.length} habitude${habits.length > 1 ? 's' : ''} au total</div>
+      <div class="footer" id="habits-footer">${footerText(sortedAll.length, filtered.length)}</div>
     `;
     if (form?.step === 'search') container.querySelector<HTMLInputElement>('#off-query')?.focus();
   }
@@ -336,6 +372,11 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
   // for the kcal-from-macros recompute to actually feel live while typing.
   container.addEventListener('input', (e) => {
     const target = e.target as HTMLInputElement;
+    if (target.id === 'habit-search') {
+      filterQuery = target.value;
+      updateHabitListBody();
+      return;
+    }
     if (!form || form.step !== 'confirm') return;
     handleFoodEntryKcalGuardInput(container, 'f', target.id, kcalTouched);
   });

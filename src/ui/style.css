@@ -68,8 +68,8 @@
   --shape-lg: 16px;
   --shape-xl: 28px;
   --shape-full: 999px;
-  --radius: var(--shape-md);
-  --radius-sm: var(--shape-xs);
+  --radius: var(--shape-lg);
+  --radius-sm: var(--shape-sm);
   --radius-pill: var(--shape-full);
   --font-display: 'Baloo 2', -apple-system, sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', Consolas, monospace;
@@ -114,8 +114,8 @@ body {
   background-color: var(--bg);
   color: var(--text);
   font-family: -apple-system, 'Inter', sans-serif;
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 17px;
+  line-height: 1.6;
 }
 
 /* pan-y (not the auto default): keeps native vertical scrolling working everywhere, but tells
@@ -129,23 +129,23 @@ body {
 
 h1 {
   font-family: var(--font-display);
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 h2 {
   font-family: var(--font-display);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 h3 {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-muted);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 @keyframes fade-in-up {
@@ -179,17 +179,18 @@ h3 {
 
 p.hint {
   color: var(--text-muted);
-  font-size: 14px;
-  margin-bottom: 14px;
+  font-size: 15px;
+  margin-bottom: 18px;
 }
 
 /* M3 elevation-by-tint: no shadow, no border — the fill color alone separates a card from the
-   page (var(--bg)) and from nested content (var(--surface2)). */
+   page (var(--bg)) and from nested content (var(--surface2)). --radius bumped to --shape-lg (see
+   :root) for a softer, more modern rounded-corner read across every element that uses it. */
 .card {
   background: var(--surface);
   border-radius: var(--radius);
-  padding: 16px;
-  margin-bottom: 14px;
+  padding: 20px;
+  margin-bottom: 18px;
 }
 
 /* Visually recedes behind a screen's own hero card (e.g. Progress tab's weight-goal card) —
@@ -221,10 +222,10 @@ textarea {
    different button roles co-exist: full-width CTAs, small icon buttons,
    sort toggles) ───────────────────────────────────────────────────────── */
 .btn {
-  padding: 8px 10px;
+  padding: 11px 14px;
   border: none;
   border-radius: var(--shape-full);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   background: var(--surface2);
   color: var(--text-muted);
@@ -247,10 +248,10 @@ textarea {
   border: none;
   border-radius: var(--shape-full);
   width: 100%;
-  padding: 10px 16px;
-  font-size: 16px;
+  padding: 14px 20px;
+  font-size: 17px;
   font-weight: 600;
-  margin-top: 10px;
+  margin-top: 14px;
 }
 
 /* M3 Filled — primary emphasis. */
@@ -260,10 +261,10 @@ textarea {
   border: none;
   border-radius: var(--shape-full);
   width: 100%;
-  padding: 10px 16px;
-  font-size: 16px;
+  padding: 14px 20px;
+  font-size: 17px;
   font-weight: 600;
-  margin-top: 10px;
+  margin-top: 14px;
 }
 
 /* M3 Outlined. */
@@ -273,15 +274,15 @@ textarea {
   border: 1px solid var(--border);
   border-radius: var(--shape-full);
   width: 100%;
-  padding: 10px 16px;
-  font-size: 16px;
+  padding: 14px 20px;
+  font-size: 17px;
   font-weight: 600;
-  margin-top: 10px;
+  margin-top: 14px;
 }
 
 .btn-icon {
-  padding: 6px 8px;
-  font-size: 15px;
+  padding: 9px 11px;
+  font-size: 16px;
 }
 
 .btn-save {
@@ -295,8 +296,8 @@ textarea {
 
 .form-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .form-actions .btn {
@@ -304,8 +305,8 @@ textarea {
 }
 
 .form-block {
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
   border-top: 1px solid var(--outline-variant);
 }
 
@@ -316,12 +317,12 @@ select {
   width: 100%;
   background: var(--surface-container-lowest);
   border: 1px solid var(--border);
-  border-radius: var(--shape-xs);
+  border-radius: var(--shape-sm);
   color: var(--text);
-  padding: 8px 10px;
-  font-size: 15px;
+  padding: 13px 14px;
+  font-size: 16px;
   outline: none;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -339,11 +340,11 @@ select:focus {
 }
 
 label.field-label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-muted);
   display: block;
-  margin-bottom: 3px;
+  margin-bottom: 5px;
 }
 
 .field-row {
@@ -357,7 +358,7 @@ label.field-label {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
   gap: 8px;
   /* Explicit, not just inherited — a <button class="list-header"> (history-section toggles)
      does NOT inherit color from its ancestor by default like a <div> would, so its text falls
@@ -371,14 +372,40 @@ label.field-label {
 }
 
 .sort-btn {
-  padding: 4px 8px;
+  padding: 6px 10px;
   border-radius: var(--shape-full);
   border: 1px solid var(--border);
   background: var(--surface2);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+/* ── Search/filter box — habit picker (library list, Day screen's quick-log chips) ──────── */
+.search-filter {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.search-filter input[type='text'] {
+  padding-left: 42px;
+  margin-bottom: 0;
+}
+
+.search-filter-icon {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.search-filter-icon svg {
+  width: 20px;
+  height: 20px;
 }
 
 .sort-btn.active {
@@ -410,9 +437,9 @@ label.field-label {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 0;
+  padding: 13px 0;
   border-bottom: 1px solid var(--outline-variant);
-  gap: 8px;
+  gap: 10px;
 }
 
 .habit-row:last-child {
@@ -425,7 +452,7 @@ label.field-label {
 }
 
 .habit-label {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -433,7 +460,7 @@ label.field-label {
 }
 
 .habit-sub {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
@@ -456,10 +483,10 @@ label.field-label {
 }
 
 .search-result {
-  padding: 8px;
+  padding: 12px;
   border-radius: var(--shape-sm);
   background: var(--surface2);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .search-result:active {
@@ -467,20 +494,20 @@ label.field-label {
 }
 
 .search-result-name {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
 }
 
 .search-result-sub {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 .empty-hint {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-muted);
-  padding: 6px 0;
+  padding: 8px 0;
 }
 
 .error-text {
@@ -491,16 +518,16 @@ label.field-label {
   background: color-mix(in srgb, var(--low) 12%, transparent);
   border: 1px solid var(--low);
   border-radius: var(--radius);
-  padding: 8px 10px;
-  margin-bottom: 10px;
-  font-size: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
 .ai-banner-title {
   color: var(--low);
   font-weight: 700;
-  margin-bottom: 3px;
+  margin-bottom: 4px;
 }
 
 /* Cautionary tone, distinct from .ai-banner's — flags a partially-logged day on the Conseils
@@ -509,22 +536,22 @@ label.field-label {
   background: color-mix(in srgb, var(--medium) 14%, transparent);
   border: 1px solid var(--medium);
   border-radius: var(--radius);
-  padding: 8px 10px;
-  margin-top: 10px;
-  font-size: 12px;
+  padding: 12px 14px;
+  margin-top: 14px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
 .footer {
   text-align: center;
-  margin-top: 4px;
-  font-size: 12px;
+  margin-top: 8px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
 /* ── Export/Import screens' key-value summaries ───────────────────────── */
 .counts {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-muted);
 }
 
@@ -546,9 +573,9 @@ label.field-label {
 }
 
 .msg {
-  font-size: 13px;
+  font-size: 14px;
   text-align: center;
-  margin-top: 6px;
+  margin-top: 8px;
   min-height: 16px;
 }
 
@@ -658,7 +685,7 @@ label.field-label {
 }
 
 #screen {
-  padding: 14px;
+  padding: 18px;
   /* Must clear #tabs' real total height: 76px row + 14px fixed buffer + env(bottom), plus a 16px
      cushion so the last card never touches the bar. Keep in sync with #tabs/#tabs-inner. */
   padding-bottom: calc(106px + env(safe-area-inset-bottom));
@@ -760,21 +787,21 @@ label.field-label {
    day-type badge, on its own since there's no sibling title to space-between with anymore. */
 .day-header {
   display: flex;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 
 .day-badge {
   font-family: var(--font-display);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  padding: 4px 10px;
+  padding: 6px 12px;
   border-radius: var(--radius-pill);
   color: var(--on-accent);
 }
 
 .inline-input-row {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
 }
 
@@ -784,7 +811,7 @@ label.field-label {
 
 #weight-input,
 #sport-input {
-  font-size: 20px;
+  font-size: 21px;
   font-weight: 600;
   border-radius: 10px;
 }
@@ -793,8 +820,8 @@ label.field-label {
 .inline-input-row .btn {
   margin: 0;
   flex-shrink: 0;
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   padding: 0;
   display: flex;
   align-items: center;
@@ -806,7 +833,7 @@ label.field-label {
 
 .kcal-total {
   font-family: var(--font-display);
-  font-size: 48px;
+  font-size: 52px;
   font-weight: 700;
   letter-spacing: -1.5px;
   text-align: center;
@@ -815,15 +842,15 @@ label.field-label {
 /* No color of its own — inherits the day-type color set inline on .kcal-total, so the number
    and its unit read as one consistent hero readout. */
 .kcal-unit {
-  font-size: 20px;
+  font-size: 21px;
   font-weight: 600;
 }
 
 .macros-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 10px;
-  margin-top: 12px;
+  gap: 14px;
+  margin-top: 16px;
 }
 
 .macro-item {
@@ -831,22 +858,22 @@ label.field-label {
 }
 
 .macro-value {
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 700;
 }
 
 .macro-label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .macro-bar-wrap {
-  height: 8px;
+  height: 10px;
   background: var(--outline-variant);
-  border-radius: 4px;
-  margin-top: 4px;
+  border-radius: 5px;
+  margin-top: 6px;
   overflow: hidden;
 }
 
@@ -863,12 +890,12 @@ label.field-label {
 
 .plaisir-btn {
   flex: 1;
-  padding: 6px 4px;
+  padding: 9px 6px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--surface2);
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.3;
   text-align: center;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
@@ -881,25 +908,25 @@ label.field-label {
 }
 
 .plaisir-btn-label {
-  font-size: 10px;
-  margin-top: 2px;
+  font-size: 11px;
+  margin-top: 3px;
 }
 
 .plaisir-btn-kcal {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
 }
 
 .goal-labels {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
-  margin: 5px 0;
+  margin: 7px 0;
 }
 
 .goal-bar-track {
-  height: 8px;
+  height: 10px;
   background: var(--surface2);
   border-radius: var(--radius-sm);
   overflow: hidden;
@@ -914,8 +941,8 @@ label.field-label {
 .chip-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 10px;
+  gap: 9px;
+  margin-bottom: 14px;
 }
 
 /* M3-outlined chip — contour only, no fill. */
@@ -924,8 +951,8 @@ label.field-label {
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: var(--radius-pill);
-  padding: 7px 14px;
-  font-size: 13px;
+  padding: 11px 18px;
+  font-size: 14px;
   font-weight: 500;
   width: auto;
   margin-top: 0;
@@ -939,10 +966,10 @@ label.field-label {
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: 8px;
+  font-size: 14px;
   color: var(--text-muted);
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .checkbox-label input {
@@ -954,8 +981,8 @@ label.field-label {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
-  padding: 5px 0;
+  gap: 8px;
+  padding: 10px 0;
   border-bottom: 1px solid var(--outline-variant);
 }
 
@@ -965,7 +992,7 @@ label.field-label {
 }
 
 .log-entry-label {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -973,17 +1000,17 @@ label.field-label {
 }
 
 .log-entry-sub {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
 /* input[type='number'] (below) has higher specificity than a bare class due to its
    attribute selector — must qualify with the element to win the width/margin override. */
 input.log-entry-portion {
-  width: 56px;
+  width: 62px;
   margin-bottom: 0;
-  padding: 3px 5px;
-  font-size: 12px;
+  padding: 5px 7px;
+  font-size: 13px;
   text-align: right;
 }
 
@@ -991,10 +1018,10 @@ input.log-entry-portion {
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 16px;
+  font-size: 18px;
   width: auto;
   margin-top: 0;
-  padding: 2px 4px;
+  padding: 4px 6px;
 }
 
 .drag-handle {
@@ -1028,8 +1055,8 @@ input.log-entry-portion {
 }
 
 .today-totals {
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
   border-top: 1px solid var(--outline-variant);
   display: flex;
   justify-content: space-between;
@@ -1037,7 +1064,7 @@ input.log-entry-portion {
 }
 
 .today-totals-kcal {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--accent-text);
 }
@@ -1046,20 +1073,20 @@ input.log-entry-portion {
 .week-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .week-table th {
   text-align: left;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   font-weight: 600;
-  padding: 4px 6px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--outline-variant);
 }
 
 .week-table td {
-  padding: 6px;
+  padding: 9px;
   border-bottom: 1px solid var(--outline-variant);
 }
 
@@ -1068,10 +1095,10 @@ input.log-entry-portion {
 }
 
 .week-table input[type='number'] {
-  width: 64px;
+  width: 68px;
   margin-bottom: 0;
-  padding: 3px 6px;
-  font-size: 12px;
+  padding: 5px 7px;
+  font-size: 13px;
   text-align: right;
 }
 
@@ -1082,8 +1109,8 @@ input.log-entry-portion {
 .week-totals-row {
   display: flex;
   justify-content: space-between;
-  font-size: 13px;
-  padding: 4px 0;
+  font-size: 14px;
+  padding: 6px 0;
   color: var(--text-muted);
 }
 
@@ -1092,11 +1119,11 @@ input.log-entry-portion {
 }
 
 .progress-bar-track {
-  height: 6px;
+  height: 8px;
   background: var(--surface2);
-  border-radius: 3px;
+  border-radius: 4px;
   overflow: hidden;
-  margin: 5px 0;
+  margin: 7px 0;
 }
 
 .progress-bar-fill {

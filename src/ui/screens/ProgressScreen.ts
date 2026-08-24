@@ -112,7 +112,7 @@ export function renderProgressScreen(container: HTMLElement, repos: ProgressScre
             trackedDays === 0
               ? '<div class="empty-hint">Pas encore de données réelles cette semaine — logge tes repas pour voir ta progression réelle.</div>'
               : `
-            <div class="list-header"><span style="font-size:12px;font-weight:600">Progression réelle</span><span class="empty-hint" style="padding:0">${DAY_NAMES[isoToday]} — J${isoToday}/7</span></div>
+            <div class="list-header"><span style="font-size:13px;font-weight:600">Progression réelle</span><span class="empty-hint" style="padding:0">${DAY_NAMES[isoToday]} — J${isoToday}/7</span></div>
             <div class="progress-bar-track"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
             <div class="week-totals-row"><span style="color:var(--medium)">~${fmt(realDeficit)} kcal nets réels</span><span>${pct}% de l'objectif</span></div>
             <div class="empty-hint" style="padding:0">${trackedDays}/${isoToday} jour${isoToday > 1 ? 's' : ''} avec données complètes ${daysLeft > 0 ? `· ${daysLeft} jour${daysLeft > 1 ? 's' : ''} restant${daysLeft > 1 ? 's' : ''}` : '· fin de semaine ✓'}</div>
@@ -125,7 +125,7 @@ export function renderProgressScreen(container: HTMLElement, repos: ProgressScre
             fidelity.tracked === 0
               ? '<div class="empty-hint">🎯 Fidélité au programme — pas encore de jour trackable.</div>'
               : `
-            <div class="list-header"><span style="font-size:12px;font-weight:600">🎯 Fidélité au programme (7 derniers jours)</span><span style="font-weight:700;color:${fidColor}">${fidelity.fidelityPct}%</span></div>
+            <div class="list-header"><span style="font-size:13px;font-weight:600">🎯 Fidélité au programme (7 derniers jours)</span><span style="font-weight:700;color:${fidColor}">${fidelity.fidelityPct}%</span></div>
             <div class="empty-hint" style="padding:0">${fidelity.onTarget}/${fidelity.tracked} jour${fidelity.tracked > 1 ? 's' : ''} dans la cible (±15%) · écart moyen ${fidelity.avgDevPct}%</div>
           `
           }
