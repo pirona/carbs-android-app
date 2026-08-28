@@ -70,6 +70,11 @@ The photo-scan features in particular are not always reliable — vision models 
 what's on the photo (see `PhotoScanScreen`'s human-confirmation step, never an auto-save). Treat
 their output as a rough starting point to correct, not a trustworthy reading.
 
+The UI itself is bilingual (French/English, switchable in Settings) — a courtesy for anyone who
+doesn't read French, not a change of audience. The generated advice/bilan text always comes back
+in French regardless of the UI language: its system prompt is deliberately kept untranslated
+rather than risk weakening the sourced health guardrails below in a translation.
+
 The exact request sent for each feature is committed to this repo as source code, so the prompt
 below is never just a description — the file is the source of truth:
 

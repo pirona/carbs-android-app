@@ -24,6 +24,7 @@ import { computeAiFootprintEquivalences } from '../../core/calc/aiFootprintEquiv
 import type { AiFeatureId } from '../../core/types';
 import { fmt } from '../format';
 import { fmt1 } from '../util';
+import { t, type Lang } from '../i18n/strings';
 
 export interface SettingsScreenRepos extends ImportRepos {
   profile: ProfileRepo;
@@ -65,7 +66,10 @@ const ACCENT_PRESETS: { name: string; hue: number }[] = [
   { name: 'Corail', hue: 355 },
 ];
 
-export function renderSettingsScreen(container: HTMLElement, repos: SettingsScreenRepos, storage: StorageAdapter): void {
+// Called by main.ts's applyLanguage() (which refreshes the persistent chrome + re-renders the
+// active screen) — this screen can't import that function directly, it's closure-bound to
+// main.ts's own topbar/tab-bar DOM references.
+export function renderSettingsScreen(container: HTMLElement, repos: SettingsScreenRepos, storage: StorageAdapter, applyLanguage: (lang: Lang) => void): void {
   let profile: Profile;
   let theme: ThemeSettings = DEFAULT_THEME;
   let nextcloud: NextcloudSettings = DEFAULT_NEXTCLOUD;
@@ -118,6 +122,14 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
               title="${p.name}"
             ></button>`,
           ).join('')}
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>${t('settings.language.title')}</h2>
+        <div class="sort-toggle">
+          <button class="sort-btn ${theme.lang === 'fr' ? 'active' : ''}" data-action="lang" data-lang="fr">🇫🇷 Français</button>
+          <button class="sort-btn ${theme.lang === 'en' ? 'active' : ''}" data-action="lang" data-lang="en">🇬🇧 English</button>
         </div>
       </div>
 
@@ -301,6 +313,14 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
       applyTheme(theme);
       await repos.theme.save(theme);
       render();
+      return;
+    }
+
+    const langBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-action="lang"]');
+    if (langBtn) {
+      theme = { ...theme, lang: langBtn.dataset.lang as Lang };
+      await repos.theme.save(theme);
+      applyLanguage(theme.lang); // re-renders the whole app shell + active screen (this one)
       return;
     }
 
