@@ -16,9 +16,10 @@ import {
 } from '../forms/foodEntryForm';
 import { computeFoodMacros } from '../../core/calc/food';
 import { filterHabitsByQuery } from '../../core/calc/habitSearch';
-import { MEAL_SLOT_LABEL } from '../../core/types';
+import { MEAL_SLOT_ICON } from '../../core/types';
 import { escapeHtml, fmt1, attachLongPress } from '../util';
 import { iconSearch } from '../icons';
+import { t, getLang } from '../i18n/strings';
 
 interface FormState {
   mode: 'add' | 'edit';
@@ -43,7 +44,7 @@ function uid(): string {
 function sortHabits(list: Habit[], mode: HabitSortMode): Habit[] {
   const sorted = [...list];
   if (mode === 'recent') sorted.sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));
-  else sorted.sort((a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }));
+  else sorted.sort((a, b) => a.label.localeCompare(b.label, getLang(), { sensitivity: 'base' }));
   return sorted;
 }
 
@@ -59,7 +60,7 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
 
   function habitRow(h: Habit): string {
     const m = computeFoodMacros(h.per100, h.portion_g);
-    const tags = [DAYTYPE_LABEL[h.day_type_tag ?? ''], h.meal_slot ? MEAL_SLOT_LABEL[h.meal_slot] : null]
+    const tags = [DAYTYPE_LABEL[h.day_type_tag ?? ''], h.meal_slot ? `${MEAL_SLOT_ICON[h.meal_slot]} ${t(`mealSlot.${h.meal_slot}`)}` : null]
       .filter(Boolean)
       .join(' · ');
     return `
@@ -79,11 +80,11 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
   function formSearchStep(f: FormState): string {
     return `
       <div class="form-block">
-        <label class="field-label">Rechercher sur OpenFoodFacts</label>
-        <input type="text" id="off-query" placeholder="ex: yaourt nature" value="${escapeHtml(f.query)}">
-        <button class="btn btn-add" data-action="search">Rechercher</button>
-        <button class="btn" data-action="scan-barcode">🔖 Code-barres</button>
-        ${f.loading ? '<div class="empty-hint">Recherche en cours…</div>' : ''}
+        <label class="field-label">${t('day.log.offSearchLabel')}</label>
+        <input type="text" id="off-query" placeholder="${t('day.log.offSearchPlaceholder')}" value="${escapeHtml(f.query)}">
+        <button class="btn btn-add" data-action="search">${t('day.log.search')}</button>
+        <button class="btn" data-action="scan-barcode">${t('habits.scanBarcode')}</button>
+        ${f.loading ? `<div class="empty-hint">${t('day.log.searching')}</div>` : ''}
         ${f.error ? `<div class="empty-hint error-text">${escapeHtml(f.error)}</div>` : ''}
         ${f.results
           .map(
@@ -94,19 +95,19 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
           </div>`,
           )
           .join('')}
-        ${f.results.length === 0 && !f.loading && f.query ? '<div class="empty-hint">Aucun résultat.</div>' : ''}
+        ${f.results.length === 0 && !f.loading && f.query ? `<div class="empty-hint">${t('day.log.noResults')}</div>` : ''}
 
         <div class="form-block">
-          <label class="field-label">🤖 Décrire en langage naturel (si absent d'OpenFoodFacts)</label>
-          <input type="text" id="ai-query" placeholder="ex: 2 mugs de café, 350g café moulu au total" value="${escapeHtml(f.aiQuery)}">
-          <button class="btn btn-add" style="background:var(--low)" data-action="ai-interpret">Interpréter avec l'IA</button>
-          ${f.aiLoading ? '<div class="empty-hint">Interprétation en cours…</div>' : ''}
+          <label class="field-label">${t('day.log.aiDescribeLabel')}</label>
+          <input type="text" id="ai-query" placeholder="${t('day.log.aiDescribePlaceholder')}" value="${escapeHtml(f.aiQuery)}">
+          <button class="btn btn-add" style="background:var(--low)" data-action="ai-interpret">${t('day.log.aiInterpret')}</button>
+          ${f.aiLoading ? `<div class="empty-hint">${t('day.log.aiInterpreting')}</div>` : ''}
           ${f.aiError ? `<div class="empty-hint error-text">${escapeHtml(f.aiError)}</div>` : ''}
         </div>
 
         <div class="form-actions">
-          <button class="btn btn-cancel" data-action="close-form">Annuler</button>
-          <button class="btn" data-action="manual-entry">Saisir à la main →</button>
+          <button class="btn btn-cancel" data-action="close-form">${t('common.cancel')}</button>
+          <button class="btn" data-action="manual-entry">${t('day.log.manualEntry')}</button>
         </div>
       </div>`;
   }
@@ -117,9 +118,9 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
       idPrefix: 'f',
       actions: { cancel: 'close-form', save: 'save-habit' },
       afterFieldsHtml: `
-        <label class="field-label">Type de jour (optionnel)</label>
+        <label class="field-label">${t('habits.dayTypeLabel')}</label>
         <select id="f-daytype">
-          <option value="" ${!p.day_type_tag ? 'selected' : ''}>Auto (selon glucides)</option>
+          <option value="" ${!p.day_type_tag ? 'selected' : ''}>${t('habits.dayTypeAuto')}</option>
           <option value="high" ${p.day_type_tag === 'high' ? 'selected' : ''}>HIGH</option>
           <option value="medium" ${p.day_type_tag === 'medium' ? 'selected' : ''}>MEDIUM</option>
           <option value="low" ${p.day_type_tag === 'low' ? 'selected' : ''}>LOW</option>
@@ -133,14 +134,14 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
   // keystroke would drop its focus/cursor (see mémoire projet 2026-08-20: an earlier live-search
   // attempt built on full re-render + focus-preservation never worked reliably on this WebView).
   function habitListBodyHtml(sortedAll: Habit[], filtered: Habit[]): string {
-    if (sortedAll.length === 0) return '<div class="empty-hint">Aucune habitude enregistrée.</div>';
-    if (filtered.length === 0) return `<div class="empty-hint">Aucun résultat pour « ${escapeHtml(filterQuery)} ».</div>`;
+    if (sortedAll.length === 0) return `<div class="empty-hint">${t('habits.none')}</div>`;
+    if (filtered.length === 0) return `<div class="empty-hint">${t('habits.noResultsFor', { query: escapeHtml(filterQuery) })}</div>`;
     return filtered.map(habitRow).join('');
   }
 
   function footerText(total: number, visible: number): string {
-    if (filterQuery.trim() && visible !== total) return `${visible} / ${total} habitude${total > 1 ? 's' : ''}`;
-    return `${total} habitude${total > 1 ? 's' : ''} au total`;
+    if (filterQuery.trim() && visible !== total) return t(total > 1 ? 'habits.footer.filtered.many' : 'habits.footer.filtered.one', { visible, total });
+    return t(total > 1 ? 'habits.footer.total.many' : 'habits.footer.total.one', { total });
   }
 
   function updateHabitListBody() {
@@ -156,25 +157,25 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
     const sortedAll = sortHabits(habits, sortMode);
     const filtered = filterHabitsByQuery(sortedAll, filterQuery);
     container.innerHTML = `
-      <p class="hint">Bibliothèque personnelle — données réelles via OpenFoodFacts ou saisie manuelle.</p>
+      <p class="hint">${t('habits.hint')}</p>
       <div class="card">
         <div class="list-header">
-          <h2>🍽️ Bibliothèque</h2>
+          <h2>${t('habits.title')}</h2>
           <div class="sort-toggle">
-            <button class="sort-btn ${sortMode === 'alpha' ? 'active' : ''}" data-action="sort" data-mode="alpha">A→Z</button>
-            <button class="sort-btn ${sortMode === 'recent' ? 'active' : ''}" data-action="sort" data-mode="recent">Récent</button>
+            <button class="sort-btn ${sortMode === 'alpha' ? 'active' : ''}" data-action="sort" data-mode="alpha">${t('day.habits.sortAlpha')}</button>
+            <button class="sort-btn ${sortMode === 'recent' ? 'active' : ''}" data-action="sort" data-mode="recent">${t('day.habits.sortRecent')}</button>
           </div>
         </div>
         ${
           sortedAll.length > 0
             ? `<div class="search-filter">
                 <span class="search-filter-icon">${iconSearch()}</span>
-                <input type="text" id="habit-search" placeholder="Rechercher une habitude…" value="${escapeHtml(filterQuery)}">
+                <input type="text" id="habit-search" placeholder="${t('day.habits.searchPlaceholder')}" value="${escapeHtml(filterQuery)}">
               </div>`
             : ''
         }
         <div id="habit-list-body">${habitListBodyHtml(sortedAll, filtered)}</div>
-        ${form ? (form.step === 'search' ? formSearchStep(form) : formConfirmStep(form)) : '<button class="btn btn-add" data-action="add">+ Ajouter une habitude</button>'}
+        ${form ? (form.step === 'search' ? formSearchStep(form) : formConfirmStep(form)) : `<button class="btn btn-add" data-action="add">${t('habits.add')}</button>`}
       </div>
       <div class="footer" id="habits-footer">${footerText(sortedAll.length, filtered.length)}</div>
     `;
@@ -232,7 +233,7 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
     if (result.status === 'error') {
       form.error = result.message;
     } else if (result.status === 'not-found') {
-      form.error = 'Produit introuvable pour ce code-barres — réessaie ou saisis à la main.';
+      form.error = t('day.barcodeNotFound');
     } else {
       form.step = 'confirm';
       kcalTouched.value = false;
@@ -356,7 +357,7 @@ export function renderHabitsScreen(container: HTMLElement, repos: { habits: Habi
   }
 
   async function deleteHabit(id: string) {
-    if (!confirm('Supprimer cette habitude ?')) return;
+    if (!confirm(t('habits.confirmDelete'))) return;
     habits = habits.filter((h) => h.id !== id);
     await repos.habits.save(habits);
     render();

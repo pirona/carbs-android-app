@@ -16,6 +16,7 @@ import { calcProgramFidelity } from '../../core/calc/fidelity';
 import { fmt } from '../format';
 import { calcWeightGoalProgress } from '../../core/calc/weightGoal';
 import { formatDateKey } from '../../core/calc/date';
+import { t } from '../i18n/strings';
 
 export interface ProgressScreenRepos {
   dayHistory: DayHistoryRepo;
@@ -58,10 +59,10 @@ export function renderProgressScreen(container: HTMLElement, repos: ProgressScre
     if (!p) return '';
     return `
       <div class="card">
-        <div class="list-header"><h2>🎯 Objectif poids</h2><span style="color:var(--high);font-weight:700">${p.pct}%</span></div>
+        <div class="list-header"><h2>${t('progress.weightGoal.title')}</h2><span style="color:var(--high);font-weight:700">${p.pct}%</span></div>
         <div class="goal-labels"><span>${profile.weight_start_kg} kg</span><span style="color:var(--text)">${weightKg} kg</span><span>${profile.weight_goal_kg} kg</span></div>
         <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${p.pct}%"></div></div>
-        <div class="goal-labels"><span style="color:${p.lost > 0 ? 'var(--high)' : 'var(--text-muted)'}">−${Math.max(0, p.lost)} kg perdus</span><span>${p.remain} kg restants</span></div>
+        <div class="goal-labels"><span style="color:${p.lost > 0 ? 'var(--high)' : 'var(--text-muted)'}">${t('progress.weightGoal.lost', { kg: Math.max(0, p.lost) })}</span><span>${t('progress.weightGoal.remain', { kg: p.remain })}</span></div>
       </div>`;
   }
 
@@ -70,16 +71,16 @@ export function renderProgressScreen(container: HTMLElement, repos: ProgressScre
       const lv = PLAISIR_LEVELS[level];
       const sel = currentOverrideLevel === level;
       return `<button class="plaisir-btn ${sel ? 'active' : ''}" data-action="plaisir" data-level="${level}">
-        <div>${lv.icon}</div><div class="plaisir-btn-label">${lv.label}</div><div class="plaisir-btn-kcal">${lv.kcal} kcal</div>
+        <div>${lv.icon}</div><div class="plaisir-btn-label">${t(`plaisir.${level}.label`)}</div><div class="plaisir-btn-kcal">${lv.kcal} kcal</div>
       </button>`;
     };
     return `
       <div class="card">
-        <div class="empty-hint" style="padding-bottom:6px">Déclarer un jour plaisir aujourd'hui :</div>
+        <div class="empty-hint" style="padding-bottom:6px">${t('progress.plaisir.prompt')}</div>
         <div class="plaisir-row">
           ${PLAISIR_CYCLE.filter((l): l is PlaisirLevel => l !== null).map(btn).join('')}
         </div>
-        ${currentOverrideLevel ? '<button class="btn btn-cancel" data-action="clear-plaisir">Effacer le jour plaisir</button>' : ''}
+        ${currentOverrideLevel ? `<button class="btn btn-cancel" data-action="clear-plaisir">${t('progress.plaisir.clear')}</button>` : ''}
       </div>`;
   }
 
@@ -93,7 +94,9 @@ export function renderProgressScreen(container: HTMLElement, repos: ProgressScre
     const { realDeficit, trackedDays, isoToday } = calcWeekRealDeficit(history, current, now(), profile);
     const pct = weekDef > 0 ? Math.min(100, Math.max(0, Math.round((realDeficit / weekDef) * 100))) : 0;
     const daysLeft = 7 - isoToday;
-    const DAY_NAMES = ['', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    // Indexed by ISO day-of-week (1=Monday..7=Sunday, matching isoToday below) — index 0 unused,
+    // mirrors the original DAY_NAMES array's placeholder-at-0 shape.
+    const DAY_KEYS = ['progress.week.day.mon', 'progress.week.day.mon', 'progress.week.day.tue', 'progress.week.day.wed', 'progress.week.day.thu', 'progress.week.day.fri', 'progress.week.day.sat', 'progress.week.day.sun'] as const;
 
     const fidelity = calcProgramFidelity(history, current, now(), profile);
     const fidColor =
@@ -101,19 +104,19 @@ export function renderProgressScreen(container: HTMLElement, repos: ProgressScre
 
     return `
       <div class="card card-quiet">
-        <h2>📅 Semaine en cours</h2>
-        <div class="week-totals-row"><span>Déficit semaine nominal (planning)</span><strong>~${fmt(weekDef)} kcal</strong></div>
-        <div class="week-totals-row"><span>Perte hebdomadaire estimée</span><strong>~${weekKg} kg</strong></div>
+        <h2>${t('progress.week.title')}</h2>
+        <div class="week-totals-row"><span>${t('progress.week.nominalDeficit')}</span><strong>~${fmt(weekDef)} kcal</strong></div>
+        <div class="week-totals-row"><span>${t('progress.week.estimatedLoss')}</span><strong>~${weekKg} kg</strong></div>
 
         <div class="form-block">
           ${
             trackedDays === 0
-              ? '<div class="empty-hint">Pas encore de données réelles cette semaine — logge tes repas pour voir ta progression réelle.</div>'
+              ? `<div class="empty-hint">${t('progress.week.noData')}</div>`
               : `
-            <div class="list-header"><span style="font-size:13px;font-weight:600">Progression réelle</span><span class="empty-hint" style="padding:0">${DAY_NAMES[isoToday]} — J${isoToday}/7</span></div>
+            <div class="list-header"><span style="font-size:13px;font-weight:600">${t('progress.week.realProgress')}</span><span class="empty-hint" style="padding:0">${t('progress.week.dayProgress', { day: t(DAY_KEYS[isoToday]), iso: isoToday })}</span></div>
             <div class="progress-bar-track"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
-            <div class="week-totals-row"><span style="color:var(--medium)">~${fmt(realDeficit)} kcal nets réels</span><span>${pct}% de l'objectif</span></div>
-            <div class="empty-hint" style="padding:0">${trackedDays}/${isoToday} jour${isoToday > 1 ? 's' : ''} avec données complètes ${daysLeft > 0 ? `· ${daysLeft} jour${daysLeft > 1 ? 's' : ''} restant${daysLeft > 1 ? 's' : ''}` : '· fin de semaine ✓'}</div>
+            <div class="week-totals-row"><span style="color:var(--medium)">${t('progress.week.netDeficit', { deficit: fmt(realDeficit) })}</span><span>${t('progress.week.pctOfGoal', { pct })}</span></div>
+            <div class="empty-hint" style="padding:0">${t(isoToday > 1 ? 'progress.week.trackedDaysComplete.many' : 'progress.week.trackedDaysComplete.one', { tracked: trackedDays, iso: isoToday })} ${daysLeft > 0 ? t(daysLeft > 1 ? 'progress.week.daysLeft.many' : 'progress.week.daysLeft.one', { n: daysLeft }) : t('progress.week.weekEnd')}</div>
           `
           }
         </div>
@@ -121,10 +124,10 @@ export function renderProgressScreen(container: HTMLElement, repos: ProgressScre
         <div class="form-block">
           ${
             fidelity.tracked === 0
-              ? '<div class="empty-hint">🎯 Fidélité au programme — pas encore de jour trackable.</div>'
+              ? `<div class="empty-hint">${t('progress.fidelity.noData')}</div>`
               : `
-            <div class="list-header"><span style="font-size:13px;font-weight:600">🎯 Fidélité au programme (7 derniers jours)</span><span style="font-weight:700;color:${fidColor}">${fidelity.fidelityPct}%</span></div>
-            <div class="empty-hint" style="padding:0">${fidelity.onTarget}/${fidelity.tracked} jour${fidelity.tracked > 1 ? 's' : ''} dans la cible (±15%) · écart moyen ${fidelity.avgDevPct}%</div>
+            <div class="list-header"><span style="font-size:13px;font-weight:600">${t('progress.fidelity.title')}</span><span style="font-weight:700;color:${fidColor}">${fidelity.fidelityPct}%</span></div>
+            <div class="empty-hint" style="padding:0">${t(fidelity.tracked > 1 ? 'progress.fidelity.many' : 'progress.fidelity.one', { onTarget: fidelity.onTarget, tracked: fidelity.tracked, avgDev: fidelity.avgDevPct ?? 0 })}</div>
           `
           }
         </div>
@@ -153,7 +156,7 @@ export function renderProgressScreen(container: HTMLElement, repos: ProgressScre
       : '';
     return `
       <div class="form-block">
-        <div class="empty-hint" style="padding-bottom:6px">Courbe de poids (derniers jours trackés)</div>
+        <div class="empty-hint" style="padding-bottom:6px">${t('progress.weightChart.title')}</div>
         <svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block;overflow:visible">
           ${goalLine}
           <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>

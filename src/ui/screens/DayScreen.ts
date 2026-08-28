@@ -5,9 +5,10 @@
 // Health Connect (Phase 4) pre-fills steps/activeCalories when granted — never a hard
 // dependency, manual sport_kcal entry always stays the primary/overridable signal.
 import type { DayType, Habit, LogEntry, Profile } from '../../core/types';
-import { MEAL_SLOT_ORDER, MEAL_SLOT_LABEL } from '../../core/types';
+import { MEAL_SLOT_ORDER, MEAL_SLOT_ICON, PLAISIR_LEVELS } from '../../core/types';
 import type { DayTrackingRepos, DaySnapshot } from '../../app/dayTracking';
 import { refreshDaySnapshot } from '../../app/dayTracking';
+import type { DayTypeSource } from '../../core/calc/dayType';
 import type { HabitsRepo, HabitSortMode } from '../../storage/repos/habitsRepo';
 import type { ProfileRepo } from '../../storage/repos/profileRepo';
 import type { HealthConnectAdapter, HealthConnectSignals } from '../../integrations/healthConnect/HealthConnectAdapter';
@@ -31,10 +32,40 @@ import { escapeHtml, fmt1, attachLongPress } from '../util';
 import { fmt } from '../format';
 import { attachMealSlotDrag } from '../mealSlotDrag';
 import { iconAdd, iconRestaurant, iconDragHandle, iconSearch } from '../icons';
+import { t, getLang, type StringKey } from '../i18n/strings';
 
 export interface DayScreenRepos extends DayTrackingRepos {
   habits: HabitsRepo;
   profile: ProfileRepo;
+}
+
+// Indexed by Date#getDay() (0=Sunday..6=Saturday) — a plain `number` doesn't narrow to a
+// StringKey via template literal inference the way a finite string-literal union does, so this
+// lookup keeps the day-name access type-safe without a cast.
+const DAYTYPE_DAY_KEYS = ['dayType.day.0', 'dayType.day.1', 'dayType.day.2', 'dayType.day.3', 'dayType.day.4', 'dayType.day.5', 'dayType.day.6'] as const;
+
+// Turns the structured DayTypeSource (core/calc/dayType.ts — no i18n dependency there) into
+// display text in the current language. Only consumer of `.source` in the app (ProgressScreen/
+// WeekScreen's detectDayType() calls only ever read `.type`).
+function formatDayTypeSource(source: DayTypeSource): string {
+  switch (source.kind) {
+    case 'plaisirOverride':
+      return t('dayType.plaisirOverride', { label: t(`plaisir.${source.level}.label`), kcal: PLAISIR_LEVELS[source.level].kcal });
+    case 'stepsAndSport': {
+      const parts: string[] = [];
+      if (source.steps !== null) parts.push(t('dayType.stepsAndSport.stepsPart', { steps: fmt(source.steps), stepKcal: fmt(source.stepKcal) }));
+      if (source.sportKcal !== null) parts.push(t('dayType.stepsAndSport.sportPart', { sportKcal: fmt(source.sportKcal) }));
+      return t('dayType.stepsAndSport.total', { parts: parts.join(' + '), total: fmt(source.total) });
+    }
+    case 'activeCalories':
+      return source.steps !== null
+        ? t('dayType.activeCalories.withSteps', { activeKcal: fmt(source.activeKcal), stepKcal: fmt(source.stepKcal), total: fmt(source.total) })
+        : t('dayType.activeCalories.withoutSteps', { activeKcal: fmt(source.activeKcal) });
+    case 'exerciseMin':
+      return t(source.low ? 'dayType.exerciseMinLow' : 'dayType.exerciseMin', { min: source.min });
+    case 'weekSchedule':
+      return t('dayType.weekSchedule', { day: t(DAYTYPE_DAY_KEYS[source.dow]) });
+  }
 }
 
 interface LogFormState {
@@ -51,7 +82,7 @@ interface LogFormState {
   prefill?: FoodEntryPrefill;
 }
 
-const DAYTYPE_LABEL: Record<DayType, string> = { high: 'HIGH CARB', medium: 'MEDIUM CARB', low: 'LOW CARB', plaisir: 'JOUR PLAISIR' };
+const DAYTYPE_LABEL_KEY: Record<DayType, StringKey> = { high: 'day.dayType.high', medium: 'day.dayType.medium', low: 'day.dayType.low', plaisir: 'day.dayType.plaisir' };
 const DAYTYPE_COLOR: Record<DayType, string> = { high: 'var(--high)', medium: 'var(--medium)', low: 'var(--low)', plaisir: 'var(--plaisir)' };
 
 
@@ -101,11 +132,11 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
     const pCarb = Math.round(((m.carb_kcal ?? 0) / total) * 100);
     return `
       <div class="macros-grid">
-        <div class="macro-item"><div class="macro-value" style="color:var(--protein)">${m.protein_g}g</div><div class="macro-label">Protéines</div>
+        <div class="macro-item"><div class="macro-value" style="color:var(--protein)">${m.protein_g}g</div><div class="macro-label">${t('day.macro.protein')}</div>
           <div class="macro-bar-wrap"><div class="macro-bar" style="width:${pProt}%;background:var(--protein)"></div></div></div>
-        <div class="macro-item"><div class="macro-value" style="color:var(--fat)">${m.fat_g}g</div><div class="macro-label">Lipides</div>
+        <div class="macro-item"><div class="macro-value" style="color:var(--fat)">${m.fat_g}g</div><div class="macro-label">${t('day.macro.fat')}</div>
           <div class="macro-bar-wrap"><div class="macro-bar" style="width:${pFat}%;background:var(--fat)"></div></div></div>
-        <div class="macro-item"><div class="macro-value" style="color:var(--carb)">${m.carb_g}g</div><div class="macro-label">Glucides</div>
+        <div class="macro-item"><div class="macro-value" style="color:var(--carb)">${m.carb_g}g</div><div class="macro-label">${t('day.macro.carb')}</div>
           <div class="macro-bar-wrap"><div class="macro-bar" style="width:${pCarb}%;background:var(--carb)"></div></div></div>
       </div>`;
   }
@@ -115,17 +146,17 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
     if (!hcGranted) {
       return `
         <div class="form-block">
-          <button class="btn btn-cta" data-action="connect-health">📱 Connecter Health Connect (pas quotidiens)</button>
+          <button class="btn btn-cta" data-action="connect-health">${t('day.hc.connect')}</button>
         </div>`;
     }
-    const stepsLabel = hcSignals.steps !== null ? `${fmt(hcSignals.steps)} pas` : 'pas indisponibles aujourd\'hui';
+    const stepsLabel = hcSignals.steps !== null ? t('day.hc.steps', { steps: fmt(hcSignals.steps) }) : t('day.hc.stepsUnavailable');
     return `
-      <div class="form-block empty-hint" style="padding-bottom:0">📱 Health Connect : ${stepsLabel}</div>`;
+      <div class="form-block empty-hint" style="padding-bottom:0">${t('day.hc.status', { stepsLabel })}</div>`;
   }
 
   function sortedHabits(): Habit[] {
     return [...habits].sort((a, b) =>
-      habitSortMode === 'recent' ? (b.updated_at || 0) - (a.updated_at || 0) : a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }),
+      habitSortMode === 'recent' ? (b.updated_at || 0) - (a.updated_at || 0) : a.label.localeCompare(b.label, getLang(), { sensitivity: 'base' }),
     );
   }
 
@@ -142,7 +173,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
     if (!habitFilterQuery.trim()) return '';
     const filtered = filterHabitsByQuery(sortedHabits(), habitFilterQuery);
     if (filtered.length === 0) {
-      return `<div class="empty-hint">Aucune habitude ne correspond à « ${escapeHtml(habitFilterQuery)} ».</div>`;
+      return `<div class="empty-hint">${t('day.habits.noMatch', { query: escapeHtml(habitFilterQuery) })}</div>`;
     }
     return `<div class="chip-row">${filtered.map((h) => `<button class="chip" data-action="log-habit" data-id="${h.id}">${escapeHtml(h.label)}</button>`).join('')}</div>`;
   }
@@ -156,15 +187,15 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
     if (habits.length === 0) return '';
     return `
       <div class="list-header">
-        <div class="empty-hint" style="padding:0">Habitudes — rechercher pour logger</div>
+        <div class="empty-hint" style="padding:0">${t('day.habits.header')}</div>
         <div class="sort-toggle">
-          <button class="sort-btn ${habitSortMode === 'alpha' ? 'active' : ''}" data-action="habit-sort" data-mode="alpha">A→Z</button>
-          <button class="sort-btn ${habitSortMode === 'recent' ? 'active' : ''}" data-action="habit-sort" data-mode="recent">Récent</button>
+          <button class="sort-btn ${habitSortMode === 'alpha' ? 'active' : ''}" data-action="habit-sort" data-mode="alpha">${t('day.habits.sortAlpha')}</button>
+          <button class="sort-btn ${habitSortMode === 'recent' ? 'active' : ''}" data-action="habit-sort" data-mode="recent">${t('day.habits.sortRecent')}</button>
         </div>
       </div>
       <div class="search-filter">
         <span class="search-filter-icon">${iconSearch()}</span>
-        <input type="text" id="habit-chip-search" placeholder="Rechercher une habitude…" value="${escapeHtml(habitFilterQuery)}">
+        <input type="text" id="habit-chip-search" placeholder="${t('day.habits.searchPlaceholder')}" value="${escapeHtml(habitFilterQuery)}">
       </div>
       <div id="habit-chip-list">${habitChipListHtml()}</div>`;
   }
@@ -174,14 +205,14 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
     if (f.step === 'search') {
       return `
         <div class="form-block">
-          <label class="field-label">Rechercher sur OpenFoodFacts</label>
-          <input type="text" id="log-off-query" placeholder="ex: yaourt nature" value="${escapeHtml(f.query)}">
+          <label class="field-label">${t('day.log.offSearchLabel')}</label>
+          <input type="text" id="log-off-query" placeholder="${t('day.log.offSearchPlaceholder')}" value="${escapeHtml(f.query)}">
           <div class="form-actions" style="margin-top:0">
-            <button class="btn btn-add" style="margin-top:0" data-action="log-search">Rechercher</button>
-            <button class="btn btn-add" style="margin-top:0;background:var(--low)" data-action="log-scan-barcode" ${f.scanning ? 'disabled' : ''}>📷 Code-barres</button>
+            <button class="btn btn-add" style="margin-top:0" data-action="log-search">${t('day.log.search')}</button>
+            <button class="btn btn-add" style="margin-top:0;background:var(--low)" data-action="log-scan-barcode" ${f.scanning ? 'disabled' : ''}>${t('day.log.scanBarcode')}</button>
           </div>
-          ${f.loading ? '<div class="empty-hint">Recherche en cours…</div>' : ''}
-          ${f.scanning ? '<div class="empty-hint">Scan en cours…</div>' : ''}
+          ${f.loading ? `<div class="empty-hint">${t('day.log.searching')}</div>` : ''}
+          ${f.scanning ? `<div class="empty-hint">${t('day.log.scanning')}</div>` : ''}
           ${f.error ? `<div class="empty-hint error-text">${escapeHtml(f.error)}</div>` : ''}
           ${f.results
             .map(
@@ -192,19 +223,19 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
             </div>`,
             )
             .join('')}
-          ${f.results.length === 0 && !f.loading && f.query ? '<div class="empty-hint">Aucun résultat.</div>' : ''}
+          ${f.results.length === 0 && !f.loading && f.query ? `<div class="empty-hint">${t('day.log.noResults')}</div>` : ''}
 
           <div class="form-block">
-            <label class="field-label">🤖 Décrire en langage naturel (si absent d'OpenFoodFacts)</label>
-            <input type="text" id="log-ai-query" placeholder="ex: 2 mugs de café, 350g café moulu au total" value="${escapeHtml(f.aiQuery)}">
-            <button class="btn btn-add" style="background:var(--low)" data-action="log-ai-interpret">Interpréter avec l'IA</button>
-            ${f.aiLoading ? '<div class="empty-hint">Interprétation en cours…</div>' : ''}
+            <label class="field-label">${t('day.log.aiDescribeLabel')}</label>
+            <input type="text" id="log-ai-query" placeholder="${t('day.log.aiDescribePlaceholder')}" value="${escapeHtml(f.aiQuery)}">
+            <button class="btn btn-add" style="background:var(--low)" data-action="log-ai-interpret">${t('day.log.aiInterpret')}</button>
+            ${f.aiLoading ? `<div class="empty-hint">${t('day.log.aiInterpreting')}</div>` : ''}
             ${f.aiError ? `<div class="empty-hint error-text">${escapeHtml(f.aiError)}</div>` : ''}
           </div>
 
           <div class="form-actions">
-            <button class="btn btn-cancel" data-action="log-close">Annuler</button>
-            <button class="btn" data-action="log-manual">Saisir à la main →</button>
+            <button class="btn btn-cancel" data-action="log-close">${t('common.cancel')}</button>
+            <button class="btn" data-action="log-manual">${t('day.log.manualEntry')}</button>
           </div>
         </div>`;
     }
@@ -220,7 +251,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
         ${renderMealSlotSelectHtml('log-f-mealslot', guessMealSlot(now()))}
         <label class="checkbox-label">
           <input type="checkbox" id="log-f-save-habit" ${f.saveAsHabit ? 'checked' : ''}>
-          💾 Sauver aussi en habitude
+          ${t('day.log.saveAsHabit')}
         </label>`,
     });
   }
@@ -230,10 +261,10 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
   function mealSectionHtml(slot: MealSlot, entries: LogEntry[]): string {
     return `
       <div class="form-block" data-meal-section="${slot}">
-        <div class="list-header"><span style="font-size:13px;font-weight:600">${MEAL_SLOT_LABEL[slot]}</span></div>
+        <div class="list-header"><span style="font-size:13px;font-weight:600">${MEAL_SLOT_ICON[slot]} ${t(`mealSlot.${slot}`)}</span></div>
         ${
           entries.length === 0
-            ? '<div class="empty-hint">Rien ici.</div>'
+            ? `<div class="empty-hint">${t('day.log.emptyMeal')}</div>`
             : entries
                 .map(
                   (e) => `
@@ -262,14 +293,14 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
 
     return `
       <div class="card">
-        <h2 style="display:flex;align-items:center;gap:8px"><span style="color:var(--accent-text);display:inline-flex">${iconRestaurant()}</span> Aujourd'hui</h2>
+        <h2 style="display:flex;align-items:center;gap:8px"><span style="color:var(--accent-text);display:inline-flex">${iconRestaurant()}</span> ${t('day.log.title')}</h2>
         ${habitChips()}
         ${
           logForm
             ? logFormHtml()
-            : `<button class="btn-cta" style="display:flex;align-items:center;justify-content:center;gap:6px" data-action="log-open">${iconAdd()} Logger un aliment</button>`
+            : `<button class="btn-cta" style="display:flex;align-items:center;justify-content:center;gap:6px" data-action="log-open">${iconAdd()} ${t('day.log.addFood')}</button>`
         }
-        <div class="empty-hint" style="padding-bottom:4px">Journal du jour</div>
+        <div class="empty-hint" style="padding-bottom:4px">${t('day.log.journal')}</div>
         ${entriesHtml}
         <div class="today-totals">
           <div>
@@ -279,7 +310,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
           ${
             target !== null
               ? `<div style="text-align:right">
-                  <div class="empty-hint" style="padding:0">vs cible ${fmt(target)} kcal</div>
+                  <div class="empty-hint" style="padding:0">${t('day.log.vsTarget', { target: fmt(target) })}</div>
                   <div style="font-weight:700;color:${diff! > 0 ? 'var(--plaisir)' : 'var(--high)'}">${diff! > 0 ? '+' : ''}${fmt(diff!)} kcal</div>
                 </div>`
               : ''
@@ -295,20 +326,20 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
 
     container.innerHTML = `
       <div class="day-header">
-        <span class="day-badge" style="background:${DAYTYPE_COLOR[dt]}">${DAYTYPE_LABEL[dt]}</span>
+        <span class="day-badge" style="background:${DAYTYPE_COLOR[dt]}">${t(DAYTYPE_LABEL_KEY[dt])}</span>
       </div>
 
       <div class="card">
-        <label class="field-label">Poids aujourd'hui</label>
+        <label class="field-label">${t('day.weightToday')}</label>
         <div class="inline-input-row">
           <input type="number" id="weight-input" placeholder="kg" value="${weight}" step="0.1">
           <button class="btn" data-action="confirm-weight">✓</button>
         </div>
-        <label class="field-label" style="margin-top:8px">Kcal sport (séance du jour)</label>
+        <label class="field-label" style="margin-top:8px">${t('day.sportKcal')}</label>
         <div class="inline-input-row">
           <input type="number" id="sport-input" placeholder="0">
           <button class="btn" data-action="confirm-sport">✓</button>
-          ${snap.current.sport_kcal !== null ? '<button class="btn btn-cancel" data-action="clear-sport">effacer</button>' : ''}
+          ${snap.current.sport_kcal !== null ? `<button class="btn btn-cancel" data-action="clear-sport">${t('day.clearSport')}</button>` : ''}
         </div>
         ${healthConnectStatusHtml()}
       </div>
@@ -319,14 +350,14 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
           dt !== 'plaisir'
             ? `
           <div class="kcal-total glow" style="color:${DAYTYPE_COLOR[dt]}">${snap.macros.kcal !== null ? fmt(snap.macros.kcal) : '—'} <span class="kcal-unit">kcal</span></div>
-          <div class="empty-hint" style="padding:0">BMR ${fmt(snap.macros.bmr)} kcal · ${weight} kg</div>
-          <div class="empty-hint" style="padding:0;font-style:italic">Détecté via : ${escapeHtml(snap.dayType.source)}</div>
+          <div class="empty-hint" style="padding:0">${t('day.bmr', { bmr: fmt(snap.macros.bmr), weight })}</div>
+          <div class="empty-hint" style="padding:0;font-style:italic">${t('day.detectedVia', { source: escapeHtml(formatDayTypeSource(snap.dayType.source)) })}</div>
           ${macroBars(snap.macros)}
         `
             : `
           <div style="text-align:center;font-size:40px;margin:10px 0 6px">🍺</div>
-          <div style="text-align:center;color:var(--plaisir);font-weight:700">Jour plaisir déclaré</div>
-          <div class="empty-hint" style="text-align:center">${escapeHtml(snap.dayType.source)}</div>
+          <div style="text-align:center;color:var(--plaisir);font-weight:700">${t('day.plaisirDeclared')}</div>
+          <div class="empty-hint" style="text-align:center">${escapeHtml(formatDayTypeSource(snap.dayType.source))}</div>
         `
         }
       </div>
@@ -347,7 +378,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
   attachLongPress(container, '[data-action="log-habit"]', 500, async (target) => {
     const h = habits.find((x) => x.id === target.dataset.id);
     if (!h) return;
-    if (!confirm(`Supprimer l'habitude "${h.label}" ?`)) return;
+    if (!confirm(t('day.confirmDeleteHabit', { label: h.label }))) return;
     await withRefresh(async () => {
       const newHabits = (await repos.habits.load()).filter((x) => x.id !== h.id);
       await repos.habits.save(newHabits);
@@ -492,7 +523,7 @@ export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, h
       if (result.status === 'error') {
         logForm.error = result.message;
       } else if (result.status === 'not-found') {
-        logForm.error = 'Produit introuvable pour ce code-barres — réessaie ou saisis à la main.';
+        logForm.error = t('day.barcodeNotFound');
       } else {
         logForm.step = 'confirm';
         logKcalTouched.value = false;
