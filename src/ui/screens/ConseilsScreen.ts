@@ -22,7 +22,7 @@
 // overwrite it — and past conseils stay browsable in the collapsible history section below.
 import type { DayEntry, DayType, LogEntry, MealSlot, Profile } from '../../core/types';
 import { MEAL_SLOT_ORDER, MEAL_SLOT_ICON } from '../../core/types';
-import { t } from '../i18n/strings';
+import { t, getLang, type StringKey } from '../i18n/strings';
 import { groupByMeal, foodTotals } from '../../core/calc/mealGroup';
 import { assessCompleteness, type AdviceCompleteness } from '../../core/calc/adviceCompleteness';
 import { computeFoodMacros } from '../../core/calc/food';
@@ -69,7 +69,7 @@ export interface ConseilsScreenRepos {
   profile: ProfileRepo;
 }
 
-const DAYTYPE_LABEL: Record<DayType, string> = { high: 'HIGH CARB', medium: 'MEDIUM CARB', low: 'LOW CARB', plaisir: 'JOUR PLAISIR' };
+const DAYTYPE_LABEL_KEY: Record<DayType, StringKey> = { high: 'day.dayType.high', medium: 'day.dayType.medium', low: 'day.dayType.low', plaisir: 'day.dayType.plaisir' };
 
 interface AdviceDay {
   day: DayEntry;
@@ -94,12 +94,12 @@ async function findAdviceDay(repos: ConseilsScreenRepos): Promise<AdviceDay | nu
 
 function formatDateLong(dateKey: string): string {
   const [y, m, d] = dateKey.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  return new Date(y, m - 1, d).toLocaleDateString(getLang() === 'en' ? 'en-US' : 'fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
 function completenessGaps(c: AdviceCompleteness): string[] {
-  const gaps: string[] = [`${c.meals_logged}/${c.meals_total} repas loggés`];
-  if (!c.has_activity) gaps.push('activité (pas/sport) non renseignée');
+  const gaps: string[] = [t('conseils.mealsLogged', { logged: c.meals_logged, total: c.meals_total })];
+  if (!c.has_activity) gaps.push(t('conseils.activityMissing'));
   return gaps;
 }
 
@@ -163,7 +163,7 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
         <div class="list-header"><span style="font-size:13px;font-weight:600">${MEAL_SLOT_ICON[slot]} ${t(`mealSlot.${slot}`)}</span><span class="empty-hint" style="padding:0">${fmt(totals.kcal)} kcal</span></div>
         ${
           entries.length === 0
-            ? '<div class="empty-hint">Rien ici.</div>'
+            ? `<div class="empty-hint">${t('day.log.emptyMeal')}</div>`
             : entries
                 .map(
                   (e) => `
@@ -181,7 +181,7 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
   }
 
   function completenessBannerHtml(c: AdviceCompleteness): string {
-    return `<div class="completeness-banner">⚠️ Journée partiellement remplie — ${completenessGaps(c).join(' · ')}. Les totaux ci-dessus peuvent être sous-estimés, et tout conseil basé dessus en tient compte.</div>`;
+    return `<div class="completeness-banner">${t('conseils.dayIncompleteBanner', { gaps: completenessGaps(c).join(' · ') })}</div>`;
   }
 
   // First empty meal slot on the flagged day — a reasonable default for "which meal did you
@@ -196,14 +196,14 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
     if (f.step === 'search') {
       return `
         <div class="form-block">
-          <label class="field-label">Rechercher sur OpenFoodFacts</label>
-          <input type="text" id="missed-off-query" placeholder="ex: yaourt nature" value="${escapeHtml(f.query)}">
+          <label class="field-label">${t('day.log.offSearchLabel')}</label>
+          <input type="text" id="missed-off-query" placeholder="${t('day.log.offSearchPlaceholder')}" value="${escapeHtml(f.query)}">
           <div class="form-actions" style="margin-top:0">
-            <button class="btn btn-add" style="margin-top:0" data-action="add-missed-search">Rechercher</button>
-            <button class="btn btn-add" style="margin-top:0;background:var(--low)" data-action="add-missed-scan-barcode" ${f.scanning ? 'disabled' : ''}>📷 Code-barres</button>
+            <button class="btn btn-add" style="margin-top:0" data-action="add-missed-search">${t('day.log.search')}</button>
+            <button class="btn btn-add" style="margin-top:0;background:var(--low)" data-action="add-missed-scan-barcode" ${f.scanning ? 'disabled' : ''}>${t('day.log.scanBarcode')}</button>
           </div>
-          ${f.loading ? '<div class="empty-hint">Recherche en cours…</div>' : ''}
-          ${f.scanning ? '<div class="empty-hint">Scan en cours…</div>' : ''}
+          ${f.loading ? `<div class="empty-hint">${t('day.log.searching')}</div>` : ''}
+          ${f.scanning ? `<div class="empty-hint">${t('day.log.scanning')}</div>` : ''}
           ${f.error ? `<div class="empty-hint error-text">${escapeHtml(f.error)}</div>` : ''}
           ${f.results
             .map(
@@ -214,19 +214,19 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
             </div>`,
             )
             .join('')}
-          ${f.results.length === 0 && !f.loading && f.query ? '<div class="empty-hint">Aucun résultat.</div>' : ''}
+          ${f.results.length === 0 && !f.loading && f.query ? `<div class="empty-hint">${t('day.log.noResults')}</div>` : ''}
 
           <div class="form-block">
-            <label class="field-label">🤖 Décrire en langage naturel (si absent d'OpenFoodFacts)</label>
-            <input type="text" id="missed-ai-query" placeholder="ex: 2 mugs de café, 350g café moulu au total" value="${escapeHtml(f.aiQuery)}">
-            <button class="btn btn-add" style="background:var(--low)" data-action="add-missed-ai-interpret">Interpréter avec l'IA</button>
-            ${f.aiLoading ? '<div class="empty-hint">Interprétation en cours…</div>' : ''}
+            <label class="field-label">${t('day.log.aiDescribeLabel')}</label>
+            <input type="text" id="missed-ai-query" placeholder="${t('day.log.aiDescribePlaceholder')}" value="${escapeHtml(f.aiQuery)}">
+            <button class="btn btn-add" style="background:var(--low)" data-action="add-missed-ai-interpret">${t('day.log.aiInterpret')}</button>
+            ${f.aiLoading ? `<div class="empty-hint">${t('day.log.aiInterpreting')}</div>` : ''}
             ${f.aiError ? `<div class="empty-hint error-text">${escapeHtml(f.aiError)}</div>` : ''}
           </div>
 
           <div class="form-actions">
-            <button class="btn btn-cancel" data-action="add-missed-close">Annuler</button>
-            <button class="btn" data-action="add-missed-manual">Saisir à la main →</button>
+            <button class="btn btn-cancel" data-action="add-missed-close">${t('common.cancel')}</button>
+            <button class="btn" data-action="add-missed-manual">${t('day.log.manualEntry')}</button>
           </div>
         </div>`;
     }
@@ -244,36 +244,36 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
 
   function addMissedEntrySectionHtml(groups: Record<MealSlot, LogEntry[]>): string {
     if (missedForm) return missedEntryFormHtml(firstEmptyMealSlot(groups));
-    return `<button class="btn-secondary" style="display:flex;align-items:center;justify-content:center;gap:6px" data-action="add-missed-open">${iconAdd()} Ajouter un aliment oublié</button>`;
+    return `<button class="btn-secondary" style="display:flex;align-items:center;justify-content:center;gap:6px" data-action="add-missed-open">${iconAdd()} ${t('conseils.addMissedFood')}</button>`;
   }
 
   function adviceResultHtml(): string {
-    if (adviceLoading) return '<div class="form-block empty-hint">🤖 Analyse en cours…</div>';
+    if (adviceLoading) return `<div class="form-block empty-hint">${t('conseils.analyzing')}</div>`;
     if (adviceError) return `<div class="form-block empty-hint error-text">${escapeHtml(adviceError)}</div>`;
     if (!advice) return '';
     return `
       <div class="ai-banner">
-        <div class="ai-banner-title">🤖 Conseil</div>
+        <div class="ai-banner-title">${t('conseils.adviceTitle')}</div>
         <div style="white-space:pre-wrap">${escapeHtml(advice.advice)}</div>
         ${
           advice.sources.length > 0
-            ? `<div class="empty-hint" style="padding-top:6px">Sources : ${advice.sources.map((s) => escapeHtml(s)).join(' · ')}</div>`
+            ? `<div class="empty-hint" style="padding-top:6px">${t('conseils.sources', { list: advice.sources.map((s) => escapeHtml(s)).join(' · ') })}</div>`
             : ''
         }
       </div>`;
   }
 
   function adviceActionHtml(): string {
-    if (adviceLoading) return `<button class="btn-cta" style="margin-top:10px" disabled>🤖 Analyse en cours…</button>`;
-    if (advice) return `<button class="btn-secondary" data-action="regenerate-advice">🔄 Régénérer le conseil</button>`;
+    if (adviceLoading) return `<button class="btn-cta" style="margin-top:10px" disabled>${t('conseils.analyzing')}</button>`;
+    if (advice) return `<button class="btn-secondary" data-action="regenerate-advice">${t('conseils.regenerateAdvice')}</button>`;
     if (pendingConfirm) {
       return `
         <div class="form-actions" style="margin-top:10px">
-          <button class="btn btn-cancel" data-action="cancel-advice">Annuler</button>
-          <button class="btn btn-save" data-action="confirm-advice">Générer quand même</button>
+          <button class="btn btn-cancel" data-action="cancel-advice">${t('common.cancel')}</button>
+          <button class="btn btn-save" data-action="confirm-advice">${t('conseils.generateAnyway')}</button>
         </div>`;
     }
-    return `<button class="btn-cta" style="margin-top:10px" data-action="get-advice">🤖 Obtenir un conseil</button>`;
+    return `<button class="btn-cta" style="margin-top:10px" data-action="get-advice">${t('conseils.getAdvice')}</button>`;
   }
 
   function historyEntryHtml(entry: CarbAdviceHistoryEntry): string {
@@ -281,12 +281,12 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
       <div class="form-block">
         <div class="list-header">
           <span style="font-size:14px;font-weight:600">${formatDateLong(entry.date)}</span>
-          <span class="empty-hint" style="padding:0">${entry.completeness.complete ? '✓ complet' : `⚠ ${entry.completeness.meals_logged}/${entry.completeness.meals_total} repas`}</span>
+          <span class="empty-hint" style="padding:0">${entry.completeness.complete ? t('conseils.complete') : t('conseils.incompleteMeals', { logged: entry.completeness.meals_logged, total: entry.completeness.meals_total })}</span>
         </div>
         <div style="white-space:pre-wrap;font-size:14px">${escapeHtml(entry.advice)}</div>
         ${
           entry.sources.length > 0
-            ? `<div class="empty-hint" style="padding-top:4px">Sources : ${entry.sources.map((s) => escapeHtml(s)).join(' · ')}</div>`
+            ? `<div class="empty-hint" style="padding-top:4px">${t('conseils.sources', { list: entry.sources.map((s) => escapeHtml(s)).join(' · ') })}</div>`
             : ''
         }
       </div>`;
@@ -297,7 +297,7 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
     return `
       <div class="card" style="margin-top:10px">
         <button class="list-header" style="width:100%;background:none;border:none;padding:0" data-action="toggle-history">
-          <span style="font-size:15px;font-weight:600">📜 Historique des conseils (${history.length})</span>
+          <span style="font-size:15px;font-weight:600">${t('conseils.historyTitle', { n: history.length })}</span>
           <span class="row-chevron${historyExpanded ? ' expanded' : ''}">▸</span>
         </button>
         ${historyExpanded ? [...history].sort((a, b) => b.date.localeCompare(a.date)).map(historyEntryHtml).join('') : ''}
@@ -312,20 +312,20 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
   const PERIOD_DAYTYPE_BADGE: Record<DayType, string> = { high: 'HIGH', medium: 'MED', low: 'LOW', plaisir: '🍺' };
 
   function periodCompletenessBannerHtml(c: PeriodCompleteness): string {
-    return `<div class="completeness-banner">⚠️ Période partiellement suivie — ${c.tracked_days}/${c.total_days} jours avec données complètes. Le déficit cumulé et les moyennes peuvent être sous-représentatifs, et tout bilan basé dessus en tient compte.</div>`;
+    return `<div class="completeness-banner">${t('conseils.periodIncompleteBanner', { tracked: c.tracked_days, total: c.total_days })}</div>`;
   }
 
   function periodBilanActionHtml(): string {
-    if (periodBilanLoading) return `<button class="btn-cta" style="margin-top:10px" disabled>🤖 Analyse en cours…</button>`;
-    if (periodBilan) return `<button class="btn-secondary" data-action="regenerate-period-bilan">🔄 Régénérer le bilan</button>`;
+    if (periodBilanLoading) return `<button class="btn-cta" style="margin-top:10px" disabled>${t('conseils.analyzing')}</button>`;
+    if (periodBilan) return `<button class="btn-secondary" data-action="regenerate-period-bilan">${t('conseils.regenerateBilan')}</button>`;
     if (periodPendingConfirm) {
       return `
         <div class="form-actions" style="margin-top:10px">
-          <button class="btn btn-cancel" data-action="cancel-period-bilan">Annuler</button>
-          <button class="btn btn-save" data-action="confirm-period-bilan">Générer quand même</button>
+          <button class="btn btn-cancel" data-action="cancel-period-bilan">${t('common.cancel')}</button>
+          <button class="btn btn-save" data-action="confirm-period-bilan">${t('conseils.generateAnyway')}</button>
         </div>`;
     }
-    return `<button class="btn-cta" style="margin-top:10px" data-action="get-period-bilan">🤖 Obtenir un bilan</button>`;
+    return `<button class="btn-cta" style="margin-top:10px" data-action="get-period-bilan">${t('conseils.getBilan')}</button>`;
   }
 
   function periodBilanResultHtml(): string {
@@ -333,11 +333,11 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
     if (!periodBilan) return '';
     return `
       <div class="ai-banner">
-        <div class="ai-banner-title">🤖 Bilan</div>
+        <div class="ai-banner-title">${t('conseils.bilanTitle')}</div>
         <div style="white-space:pre-wrap">${escapeHtml(periodBilan.bilan)}</div>
         ${
           periodBilan.sources.length > 0
-            ? `<div class="empty-hint" style="padding-top:6px">Sources : ${periodBilan.sources.map((s) => escapeHtml(s)).join(' · ')}</div>`
+            ? `<div class="empty-hint" style="padding-top:6px">${t('conseils.sources', { list: periodBilan.sources.map((s) => escapeHtml(s)).join(' · ') })}</div>`
             : ''
         }
       </div>`;
@@ -347,25 +347,25 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
     if (!periodStats || !periodCompleteness) return '';
     const s = periodStats;
     if (s.trackedDays === 0) {
-      return `<div class="empty-hint" style="margin-top:8px;padding-bottom:0">Aucun jour suivi sur cette période — rien à analyser.</div>`;
+      return `<div class="empty-hint" style="margin-top:8px;padding-bottom:0">${t('conseils.noTrackedDays')}</div>`;
     }
     const breakdown = (['high', 'medium', 'low', 'plaisir'] as DayType[]).map((dt) => `${PERIOD_DAYTYPE_BADGE[dt]}×${s.dayTypeCounts[dt]}`).join(' · ');
     return `
       <div class="today-totals" style="margin-top:10px">
         <div>
-          <div class="today-totals-kcal">${s.realDeficitKcal >= 0 ? '+' : ''}${fmt(s.realDeficitKcal)} <span class="empty-hint" style="padding:0">kcal net</span></div>
-          <div class="empty-hint" style="padding:0">${s.trackedDays}/${s.totalDays} jours suivis</div>
+          <div class="today-totals-kcal">${s.realDeficitKcal >= 0 ? '+' : ''}${fmt(s.realDeficitKcal)} <span class="empty-hint" style="padding:0">${t('conseils.netKcal')}</span></div>
+          <div class="empty-hint" style="padding:0">${t('conseils.daysTracked', { tracked: s.trackedDays, total: s.totalDays })}</div>
         </div>
         ${
           s.weightDeltaKg !== null
             ? `<div style="text-align:right">
-                <div class="empty-hint" style="padding:0">poids</div>
+                <div class="empty-hint" style="padding:0">${t('conseils.weight')}</div>
                 <div style="font-weight:700;color:${s.weightDeltaKg <= 0 ? 'var(--high)' : 'var(--plaisir)'}">${s.weightDeltaKg > 0 ? '+' : ''}${s.weightDeltaKg} kg</div>
               </div>`
             : ''
         }
       </div>
-      ${s.avgFoodKcal !== null ? `<div class="empty-hint" style="padding:0;margin-top:4px">Moyenne : ${fmt(s.avgFoodKcal)} kcal/j · P${fmt1(s.avgProteinG!)} L${fmt1(s.avgFatG!)} G${fmt1(s.avgCarbG!)}</div>` : ''}
+      ${s.avgFoodKcal !== null ? `<div class="empty-hint" style="padding:0;margin-top:4px">${t('conseils.avgPerDay', { kcal: fmt(s.avgFoodKcal), prot: fmt1(s.avgProteinG!), fat: fmt1(s.avgFatG!), carb: fmt1(s.avgCarbG!) })}</div>` : ''}
       <div class="empty-hint" style="padding:0">${breakdown}</div>
       ${!periodCompleteness.complete ? periodCompletenessBannerHtml(periodCompleteness) : ''}
       ${periodBilanActionHtml()}
@@ -377,20 +377,20 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
     const invalid = periodStart > periodEnd;
     return `
       <div class="card" style="margin-top:10px">
-        <h2>📊 Bilan période</h2>
+        <h2>${t('conseils.periodTitle')}</h2>
         <div class="form-actions" style="margin-top:0">
-          <button class="btn" data-action="period-preset" data-preset="this-week">Cette semaine</button>
-          <button class="btn" data-action="period-preset" data-preset="last-week">Semaine dernière</button>
+          <button class="btn" data-action="period-preset" data-preset="this-week">${t('conseils.thisWeek')}</button>
+          <button class="btn" data-action="period-preset" data-preset="last-week">${t('conseils.lastWeek')}</button>
         </div>
         <div class="form-actions" style="margin-top:0">
-          <button class="btn" data-action="period-preset" data-preset="this-month">Ce mois-ci</button>
-          <button class="btn" data-action="period-preset" data-preset="last-month">Mois dernier</button>
+          <button class="btn" data-action="period-preset" data-preset="this-month">${t('conseils.thisMonth')}</button>
+          <button class="btn" data-action="period-preset" data-preset="last-month">${t('conseils.lastMonth')}</button>
         </div>
         <div class="field-row" style="margin-top:6px">
-          <div><label class="field-label">Du</label><input type="date" id="period-start" value="${periodStart}"></div>
-          <div><label class="field-label">Au</label><input type="date" id="period-end" value="${periodEnd}"></div>
+          <div><label class="field-label">${t('conseils.from')}</label><input type="date" id="period-start" value="${periodStart}"></div>
+          <div><label class="field-label">${t('conseils.to')}</label><input type="date" id="period-end" value="${periodEnd}"></div>
         </div>
-        ${invalid ? '<div class="empty-hint error-text">Date de fin avant la date de début.</div>' : periodBodyHtml()}
+        ${invalid ? `<div class="empty-hint error-text">${t('conseils.invalidDateRange')}</div>` : periodBodyHtml()}
       </div>`;
   }
 
@@ -399,12 +399,12 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
       <div class="form-block">
         <div class="list-header">
           <span style="font-size:14px;font-weight:600">${formatDateShort(entry.start_date)} → ${formatDateShort(entry.end_date)}</span>
-          <span class="empty-hint" style="padding:0">${entry.completeness.complete ? '✓ complet' : `⚠ ${entry.completeness.tracked_days}/${entry.completeness.total_days}j`}</span>
+          <span class="empty-hint" style="padding:0">${entry.completeness.complete ? t('conseils.complete') : t('conseils.incompleteDays', { tracked: entry.completeness.tracked_days, total: entry.completeness.total_days })}</span>
         </div>
         <div style="white-space:pre-wrap;font-size:14px">${escapeHtml(entry.bilan)}</div>
         ${
           entry.sources.length > 0
-            ? `<div class="empty-hint" style="padding-top:4px">Sources : ${entry.sources.map((s) => escapeHtml(s)).join(' · ')}</div>`
+            ? `<div class="empty-hint" style="padding-top:4px">${t('conseils.sources', { list: entry.sources.map((s) => escapeHtml(s)).join(' · ') })}</div>`
             : ''
         }
       </div>`;
@@ -415,7 +415,7 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
     return `
       <div class="card" style="margin-top:10px">
         <button class="list-header" style="width:100%;background:none;border:none;padding:0" data-action="toggle-period-history">
-          <span style="font-size:15px;font-weight:600">📜 Historique des bilans (${periodHistory.length})</span>
+          <span style="font-size:15px;font-weight:600">${t('conseils.periodHistoryTitle', { n: periodHistory.length })}</span>
           <span class="row-chevron${periodHistoryExpanded ? ' expanded' : ''}">▸</span>
         </button>
         ${periodHistoryExpanded ? [...periodHistory].sort((a, b) => b.start_date.localeCompare(a.start_date)).map(periodHistoryEntryHtml).join('') : ''}
@@ -427,8 +427,8 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
 
     if (!adviceDay) {
       container.innerHTML = `
-        <p class="hint">Conseils personnalisés basés sur une journée passée entièrement remplie (poids, activité et repas).</p>
-        <div class="card"><div class="empty-hint">Pas encore de journée complète à analyser — remplis poids, sport/pas et tous tes repas une journée entière, elle apparaîtra ici le lendemain.</div></div>
+        <p class="hint">${t('conseils.hint')}</p>
+        <div class="card"><div class="empty-hint">${t('conseils.noCompleteDay')}</div></div>
         ${historySectionHtml()}
         ${periodSectionHtml}`;
       return;
@@ -441,11 +441,11 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
     const groups = groupByMeal(entries);
 
     container.innerHTML = `
-      <p class="hint">Basé sur ta dernière journée entièrement remplie.</p>
+      <p class="hint">${t('conseils.basedOnLastDay')}</p>
       <div class="card">
         <div class="list-header">
           <h2>${formatDateLong(day.date)}</h2>
-          <span class="day-badge" style="background:var(--accent)">${DAYTYPE_LABEL[day.dayType]}</span>
+          <span class="day-badge" style="background:var(--accent)">${t(DAYTYPE_LABEL_KEY[day.dayType])}</span>
         </div>
         <div class="today-totals">
           <div>
@@ -455,7 +455,7 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
           ${
             target !== null
               ? `<div style="text-align:right">
-                  <div class="empty-hint" style="padding:0">vs cible ${fmt(target)} kcal</div>
+                  <div class="empty-hint" style="padding:0">${t('day.log.vsTarget', { target: fmt(target) })}</div>
                   <div style="font-weight:700;color:${diff! > 0 ? 'var(--plaisir)' : 'var(--high)'}">${diff! > 0 ? '+' : ''}${fmt(diff!)} kcal</div>
                 </div>`
               : ''
@@ -529,7 +529,7 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
       });
       periodHistory = await repos.carbPeriodBilanHistory.load();
     } catch (err) {
-      periodBilanError = err instanceof MissingMistralKeyError ? err.message : `Bilan impossible (${(err as Error).message}) — réessaie plus tard.`;
+      periodBilanError = err instanceof MissingMistralKeyError ? err.message : t('conseils.err.bilanFailed', { message: (err as Error).message });
     }
     periodBilanLoading = false;
     render();
@@ -585,7 +585,7 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
       });
       history = await repos.carbAdviceHistory.load();
     } catch (err) {
-      adviceError = err instanceof MissingMistralKeyError ? err.message : `Conseil impossible (${(err as Error).message}) — réessaie plus tard.`;
+      adviceError = err instanceof MissingMistralKeyError ? err.message : t('conseils.err.adviceFailed', { message: (err as Error).message });
     }
     adviceLoading = false;
     render();
@@ -724,7 +724,7 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
         if (result.status === 'error') {
           missedForm.error = result.message;
         } else if (result.status === 'not-found') {
-          missedForm.error = 'Produit introuvable pour ce code-barres — réessaie ou saisis à la main.';
+          missedForm.error = t('day.barcodeNotFound');
         } else {
           missedForm.step = 'confirm';
           missedKcalTouched.value = false;
