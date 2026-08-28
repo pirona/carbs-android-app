@@ -18,6 +18,29 @@
   font-display: swap;
 }
 
+/* Plus Jakarta Sans — UI/body face (design direction "Confiance douce", 2026-08-28): Baloo 2
+   is now reserved for the single kcal hero number, everything else reads in this grotesque for
+   a steadier, more grown-up hierarchy without abandoning the app's roundness. Two subset files
+   (own variable-weight range covers 400–700, same self-hosted/zero-CDN pattern as Baloo 2). */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('./fonts/pjs-latin.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F,
+    U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215;
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('./fonts/pjs-latin-ext.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+
 :root {
   /* ── Accent hue — single user-configurable value, everything below derives from it ── */
   --accent-h: 28;
@@ -52,9 +75,13 @@
   --secondary-container-hover: hsl(var(--accent-h) 87% 79%);
   --on-secondary-container: hsl(var(--accent-h) 69% 21%);
 
-  /* Day-type + macro families — rotations/shades around --accent, not separate hues. */
+  /* Day-type + macro families — rotations/shades around --accent, not separate hues.
+     --medium's offset was originally +35 at full --accent-s/--accent-l, which for the default
+     apricot preset (hue 28) lands at hue 63 — the acid "piss yellow" zone (bright, high-lightness
+     pure yellow-green). Smaller offset (+24, stays closer to amber/gold) plus lower saturation
+     and lightness (richer, less washed-out) reads as honey/mustard instead across every preset. */
   --high: var(--accent);
-  --medium: hsl(calc(var(--accent-h) + 35) var(--accent-s) var(--accent-l));
+  --medium: hsl(calc(var(--accent-h) + 24) calc(var(--accent-s) - 6%) calc(var(--accent-l) - 7%));
   --low: hsl(calc(var(--accent-h) - 35) calc(var(--accent-s) - 15%) calc(var(--accent-l) - 3%));
   --plaisir: hsl(calc(var(--accent-h) + 180) var(--accent-s) calc(var(--accent-l) + 8%));
   --protein: var(--accent);
@@ -71,8 +98,16 @@
   --radius: var(--shape-lg);
   --radius-sm: var(--shape-sm);
   --radius-pill: var(--shape-full);
+  /* Reserved for the kcal hero number only (see .kcal-total) — everywhere else uses --font-ui. */
   --font-display: 'Baloo 2', -apple-system, sans-serif;
+  --font-ui: 'Plus Jakarta Sans', -apple-system, sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+
+  /* Soft card depth (design direction "Confiance douce") — a low, warm-neutral shadow, not
+     tinted to --accent-h: a colored shadow drifted toward mud on some hue presets, a neutral
+     black at low opacity reads as "lifted" in both light and dark mode without fighting the
+     preset palette. Two layers (tight contact shadow + soft ambient) rather than one flat blur. */
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 4px 14px rgba(0, 0, 0, 0.06);
 }
 
 /* Dark mode: system preference by default, explicit override via data-theme wins either way.
@@ -104,6 +139,99 @@
   --disabled: hsl(var(--accent-h) 15% 40%);
 }
 
+/* ── "Noir & Blanc" palette (--palette 'mono' in ThemeSettings) — a real grayscale theme, not
+   accentHue left as-is with --accent-s pushed to 0. bg/surface/text/border/outline-variant and
+   the on-accent/secondary-container pairing all hardcode their OWN saturation percentages above
+   (100%, 64%, 35%, 41%...), independent of --accent-s, so they'd stay visibly tinted at any hue
+   unless overridden here directly. Day-type/macro colors (high/medium/low/plaisir/protein/fat/
+   carb) collapse to lightness-only steps — every screen that uses them also carries a text label
+   (day-badge text, macro name under each bar), so meaning survives losing hue entirely. */
+:root[data-palette='mono'] {
+  --bg: hsl(0 0% 98%);
+  --surface: hsl(0 0% 91%);
+  --surface2: hsl(0 0% 85%);
+  --surface-container-lowest: hsl(0 0% 99.5%);
+  --surface-container-low: hsl(0 0% 95%);
+  --text: hsl(0 0% 12%);
+  --text-muted: hsl(0 0% 42%);
+  --border: hsl(0 0% 72%);
+  --outline-variant: hsl(0 0% 82%);
+  --disabled: hsl(0 0% 66%);
+  --bad: #c93a41;
+  --accent: hsl(0 0% 14%);
+  --accent-glow: hsl(0 0% 14% / 45%);
+  --accent-wash: hsl(0 0% 14% / 12%);
+  --on-accent: hsl(0 0% 99%);
+  --accent-text: hsl(0 0% 10%);
+  --secondary-container: hsl(0 0% 83%);
+  --secondary-container-hover: hsl(0 0% 76%);
+  --on-secondary-container: hsl(0 0% 14%);
+  --high: hsl(0 0% 14%);
+  --medium: hsl(0 0% 38%);
+  --low: hsl(0 0% 58%);
+  --plaisir: hsl(0 0% 26%);
+  --protein: hsl(0 0% 18%);
+  --fat: hsl(0 0% 40%);
+  --carb: hsl(0 0% 60%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-palette='mono']:not([data-theme='light']) {
+    --bg: hsl(0 0% 8%);
+    --surface: hsl(0 0% 14%);
+    --surface2: hsl(0 0% 20%);
+    --surface-container-lowest: hsl(0 0% 11%);
+    --surface-container-low: hsl(0 0% 12%);
+    --text: hsl(0 0% 95%);
+    --text-muted: hsl(0 0% 68%);
+    --border: hsl(0 0% 27%);
+    --outline-variant: hsl(0 0% 22%);
+    --disabled: hsl(0 0% 42%);
+    --accent: hsl(0 0% 92%);
+    --accent-glow: hsl(0 0% 92% / 45%);
+    --accent-wash: hsl(0 0% 92% / 14%);
+    --on-accent: hsl(0 0% 10%);
+    --accent-text: hsl(0 0% 96%);
+    --secondary-container: hsl(0 0% 26%);
+    --secondary-container-hover: hsl(0 0% 32%);
+    --on-secondary-container: hsl(0 0% 94%);
+    --high: hsl(0 0% 92%);
+    --medium: hsl(0 0% 72%);
+    --low: hsl(0 0% 52%);
+    --plaisir: hsl(0 0% 80%);
+    --protein: hsl(0 0% 90%);
+    --fat: hsl(0 0% 70%);
+    --carb: hsl(0 0% 50%);
+  }
+}
+:root[data-palette='mono'][data-theme='dark'] {
+  --bg: hsl(0 0% 8%);
+  --surface: hsl(0 0% 14%);
+  --surface2: hsl(0 0% 20%);
+  --surface-container-lowest: hsl(0 0% 11%);
+  --surface-container-low: hsl(0 0% 12%);
+  --text: hsl(0 0% 95%);
+  --text-muted: hsl(0 0% 68%);
+  --border: hsl(0 0% 27%);
+  --outline-variant: hsl(0 0% 22%);
+  --disabled: hsl(0 0% 42%);
+  --accent: hsl(0 0% 92%);
+  --accent-glow: hsl(0 0% 92% / 45%);
+  --accent-wash: hsl(0 0% 92% / 14%);
+  --on-accent: hsl(0 0% 10%);
+  --accent-text: hsl(0 0% 96%);
+  --secondary-container: hsl(0 0% 26%);
+  --secondary-container-hover: hsl(0 0% 32%);
+  --on-secondary-container: hsl(0 0% 94%);
+  --high: hsl(0 0% 92%);
+  --medium: hsl(0 0% 72%);
+  --low: hsl(0 0% 52%);
+  --plaisir: hsl(0 0% 80%);
+  --protein: hsl(0 0% 90%);
+  --fat: hsl(0 0% 70%);
+  --carb: hsl(0 0% 50%);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -113,7 +241,7 @@
 body {
   background-color: var(--bg);
   color: var(--text);
-  font-family: -apple-system, 'Inter', sans-serif;
+  font-family: var(--font-ui);
   font-size: 17px;
   line-height: 1.6;
 }
@@ -128,16 +256,16 @@ body {
 }
 
 h1 {
-  font-family: var(--font-display);
+  font-family: var(--font-ui);
   font-size: 28px;
   font-weight: 700;
   margin-bottom: 6px;
 }
 
 h2 {
-  font-family: var(--font-display);
+  font-family: var(--font-ui);
   font-size: 20px;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 10px;
 }
 
@@ -191,6 +319,7 @@ p.hint {
   border-radius: var(--radius);
   padding: 20px;
   margin-bottom: 18px;
+  box-shadow: var(--card-shadow);
 }
 
 /* Visually recedes behind a screen's own hero card (e.g. Progress tab's weight-goal card) —
@@ -203,6 +332,7 @@ p.hint {
    siblings (e.g. PhotoScanScreen's expanded review row among collapsed ones). */
 .card-elevated {
   background: var(--surface2);
+  box-shadow: var(--card-shadow);
 }
 
 textarea {
@@ -254,7 +384,8 @@ textarea {
   margin-top: 14px;
 }
 
-/* M3 Filled — primary emphasis. */
+/* M3 Filled — primary emphasis. Colored lift shadow (not the neutral --card-shadow) — this is
+   the one button people press several times a day, worth a touch more confidence than a card. */
 .btn-cta {
   background: var(--high);
   color: var(--on-accent);
@@ -265,6 +396,7 @@ textarea {
   font-size: 17px;
   font-weight: 600;
   margin-top: 14px;
+  box-shadow: 0 4px 14px hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 30%);
 }
 
 /* M3 Outlined. */
@@ -622,9 +754,9 @@ label.field-label {
 #topbar-title {
   flex: 1;
   min-width: 0;
-  font-family: var(--font-display);
+  font-family: var(--font-ui);
   font-size: 22px;
-  font-weight: 600;
+  font-weight: 700;
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -773,9 +905,9 @@ label.field-label {
 }
 
 .nav-label {
-  font-family: var(--font-display);
+  font-family: var(--font-ui);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .nav-item.active .nav-label {
@@ -791,7 +923,7 @@ label.field-label {
 }
 
 .day-badge {
-  font-family: var(--font-display);
+  font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 700;
   padding: 6px 12px;

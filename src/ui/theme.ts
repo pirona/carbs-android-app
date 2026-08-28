@@ -12,4 +12,10 @@ export function applyTheme(settings: ThemeSettings): void {
     root.dataset.theme = settings.mode;
   }
   root.style.setProperty('--accent-h', String(settings.accentHue));
+  root.style.setProperty('--accent-s', `${settings.accentSaturation}%`);
+  if (settings.palette === 'mono') {
+    root.dataset.palette = 'mono';
+  } else {
+    delete root.dataset.palette;
+  }
 }

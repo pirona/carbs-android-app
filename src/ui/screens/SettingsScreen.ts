@@ -53,17 +53,26 @@ const RETRO_BUCKET_LABEL_KEY: Record<RetroBucketId, StringKey> = {
   period_bilan: 'aiFeature.period_bilan',
 };
 
-// Fixed swatches instead of a free hue slider. --accent-h drives every color in style.css —
-// background, surfaces, text, borders, day-type/macro colors — so picking one of these reskins
-// the whole GUI, not just the accent; the swatch itself previews the accent (hsl(hue, 70%, 66%),
-// same formula style.css uses) as the hue's clearest single-color representative.
-const ACCENT_PRESETS: { nameKey: StringKey; hue: number }[] = [
-  { nameKey: 'settings.accent.apricot', hue: 28 },
-  { nameKey: 'settings.accent.lemon', hue: 50 },
-  { nameKey: 'settings.accent.mint', hue: 155 },
-  { nameKey: 'settings.accent.sky', hue: 205 },
-  { nameKey: 'settings.accent.plum', hue: 285 },
-  { nameKey: 'settings.accent.coral', hue: 355 },
+// Fixed swatches instead of a free hue slider. --accent-h/--accent-s drive every color in
+// style.css — background, surfaces, text, borders, day-type/macro colors — so picking one of
+// these reskins the whole GUI, not just the accent button. Saturation is now per-preset (used
+// to be one blanket 74% for every hue) — a warm hue at 74% sat/53% light reads as "acid yellow"
+// (the "medium" day-type color inherited this too, see style.css), a cooler/darker one doesn't
+// need to be muted at all; each preset is tuned instead of sharing one number. `mono: true`
+// marks the real grayscale palette (see [data-palette='mono'] in style.css) — hue/sat are
+// ignored for it, kept only so the swatch preview has *something* to render as its dot.
+const ACCENT_PRESETS: { nameKey: StringKey; hue: number; sat: number; mono?: true }[] = [
+  { nameKey: 'settings.accent.apricot', hue: 28, sat: 74 },
+  { nameKey: 'settings.accent.sage', hue: 130, sat: 32 },
+  { nameKey: 'settings.accent.mint', hue: 155, sat: 58 },
+  { nameKey: 'settings.accent.cyan', hue: 188, sat: 64 },
+  { nameKey: 'settings.accent.sky', hue: 205, sat: 60 },
+  { nameKey: 'settings.accent.lavender', hue: 255, sat: 42 },
+  { nameKey: 'settings.accent.plum', hue: 285, sat: 52 },
+  { nameKey: 'settings.accent.raspberry', hue: 335, sat: 60 },
+  { nameKey: 'settings.accent.coral', hue: 355, sat: 68 },
+  { nameKey: 'settings.accent.slate', hue: 215, sat: 14 },
+  { nameKey: 'settings.accent.mono', hue: 0, sat: 0, mono: true },
 ];
 
 // Called by main.ts's applyLanguage() (which refreshes the persistent chrome + re-renders the
@@ -111,17 +120,24 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
         </div>
         <label class="field-label">${t('settings.theme.palette')}</label>
         <div class="accent-preset-row">
-          ${ACCENT_PRESETS.map(
-            (p) => `
+          ${ACCENT_PRESETS.map((p) => {
+            const isActive = p.mono ? theme.palette === 'mono' : theme.palette === 'hue' && theme.accentHue === p.hue;
+            // Mono's swatch previews as a black/white split rather than a flat fill — a plain
+            // hsl(0 0% 50%) dot would just look like a fainter version of any other preset,
+            // giving no visual hint that this one behaves differently (drops hue entirely).
+            const swatchBg = p.mono ? 'linear-gradient(135deg, #17171a 50%, #fbfbfb 50%)' : `hsl(${p.hue} ${p.sat}% 66%)`;
+            return `
             <button
-              class="accent-preset ${theme.accentHue === p.hue ? 'active' : ''}"
+              class="accent-preset ${isActive ? 'active' : ''}"
               data-action="theme-accent"
               data-hue="${p.hue}"
-              style="background:hsl(${p.hue} 70% 66%)"
+              data-sat="${p.sat}"
+              data-mono="${p.mono ? '1' : '0'}"
+              style="background:${swatchBg}"
               aria-label="${t(p.nameKey)}"
               title="${t(p.nameKey)}"
-            ></button>`,
-          ).join('')}
+            ></button>`;
+          }).join('')}
         </div>
       </div>
 
@@ -291,7 +307,15 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
 
     const accentBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-action="theme-accent"]');
     if (accentBtn) {
-      theme = { ...theme, accentHue: Number(accentBtn.dataset.hue) };
+      const mono = accentBtn.dataset.mono === '1';
+      theme = {
+        ...theme,
+        palette: mono ? 'mono' : 'hue',
+        // accentHue/accentSaturation still updated even for mono — keeps them in sync with the
+        // swatch so a later switch back to a hue preset doesn't silently jump to a stale value.
+        accentHue: Number(accentBtn.dataset.hue),
+        accentSaturation: Number(accentBtn.dataset.sat),
+      };
       applyTheme(theme);
       await repos.theme.save(theme);
       render();
