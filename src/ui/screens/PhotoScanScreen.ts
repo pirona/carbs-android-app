@@ -25,18 +25,19 @@ import { guessMealSlot } from '../../core/calc/date';
 import { renderPer100FieldsHtml, renderMealSlotSelectHtml } from '../forms/foodEntryForm';
 import { escapeHtml, fmt1 } from '../util';
 import { fmt } from '../format';
+import { t, type StringKey } from '../i18n/strings';
 
 export interface PhotoScanScreenRepos {
   habits: HabitsRepo;
   foodLog: FoodLogRepo;
 }
 
-const SOURCE_LABEL: Record<RowSource, string> = {
-  habit: '🔁 Habitude reconnue',
-  ciqual: '🇫🇷 CIQUAL',
-  off: '📦 OpenFoodFacts',
-  ai: '🤖 Estimation IA',
-  manual: '✎ Manuel',
+const SOURCE_LABEL_KEY: Record<RowSource, StringKey> = {
+  habit: 'photoScan.source.habit',
+  ciqual: 'photoScan.source.ciqual',
+  off: 'photoScan.source.off',
+  ai: 'photoScan.source.ai',
+  manual: 'photoScan.source.manual',
 };
 
 function uid(): string {
@@ -110,7 +111,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
         <div class="habit-row" data-action="toggle-row" data-index="${index}">
           <div class="habit-info">
             <div class="habit-label">${escapeHtml(row.label)}</div>
-            <div class="habit-sub">${m.kcal} kcal · ${SOURCE_LABEL[row.source]}</div>
+            <div class="habit-sub">${m.kcal} kcal · ${t(SOURCE_LABEL_KEY[row.source])}</div>
           </div>
           <div class="habit-actions">
             <button class="btn btn-icon" data-action="remove-row" data-index="${index}">✕</button>
@@ -121,7 +122,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
     return `
       <div class="card scan-row">
         <div class="list-header" data-action="toggle-row" data-index="${index}" style="cursor:pointer">
-          <span class="empty-hint" style="padding:0">${SOURCE_LABEL[row.source]}${row.confidence ? ` · confiance ${escapeHtml(row.confidence)}` : ''}</span>
+          <span class="empty-hint" style="padding:0">${t(SOURCE_LABEL_KEY[row.source])}${row.confidence ? ` · ${t('photoScan.confidence', { confidence: escapeHtml(row.confidence) })}` : ''}</span>
           <span style="display:flex;align-items:center;gap:6px">
             <button class="icon-btn" data-action="remove-row" data-index="${index}">✕</button>
             <span class="row-chevron expanded">▸</span>
@@ -132,7 +133,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
         ${
           row.ciqualCandidates.length > 1
             ? `
-          <div class="empty-hint" style="padding-top:8px">Autres correspondances CIQUAL :</div>
+          <div class="empty-hint" style="padding-top:8px">${t('photoScan.otherCiqualMatches')}</div>
           ${row.ciqualCandidates
             .slice(0, 4)
             .map(
@@ -146,8 +147,8 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
             : ''
         }
 
-        <button class="btn" style="margin-top:8px" data-action="search-off" data-index="${index}">🔍 Chercher sur OpenFoodFacts</button>
-        ${row.offSearching ? '<div class="empty-hint">Recherche en cours…</div>' : ''}
+        <button class="btn" style="margin-top:8px" data-action="search-off" data-index="${index}">${t('photoScan.searchOff')}</button>
+        ${row.offSearching ? `<div class="empty-hint">${t('day.log.searching')}</div>` : ''}
         ${row.offError ? `<div class="empty-hint error-text">${escapeHtml(row.offError)}</div>` : ''}
         ${row.offResults
           .map(
@@ -170,18 +171,18 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
       { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0 },
     );
     return `
-      <p class="hint">Vérifie et ajuste chaque composant avant de logger — rien n'est enregistré tant que tu n'as pas confirmé.</p>
-      ${recognizedHabitLabel ? `<div class="ai-banner"><div class="ai-banner-title">🔁 Plat reconnu</div><div>Pré-rempli depuis l'habitude « ${escapeHtml(recognizedHabitLabel)} » — toujours modifiable.</div></div>` : ''}
-      ${overallNote ? `<div class="ai-banner"><div class="ai-banner-title">🤖 Remarque de l'IA</div><div>${escapeHtml(overallNote)}</div></div>` : ''}
+      <p class="hint">${t('photoScan.reviewHint')}</p>
+      ${recognizedHabitLabel ? `<div class="ai-banner"><div class="ai-banner-title">${t('photoScan.recognizedTitle')}</div><div>${t('photoScan.recognizedBody', { label: escapeHtml(recognizedHabitLabel) })}</div></div>` : ''}
+      ${overallNote ? `<div class="ai-banner"><div class="ai-banner-title">${t('photoScan.aiNoteTitle')}</div><div>${escapeHtml(overallNote)}</div></div>` : ''}
       ${rows.map(rowCard).join('')}
       ${
         rows.length === 0
-          ? `<div class="card"><div class="error-text" style="font-weight:700;margin-bottom:4px">⚠️ Rien d'identifiable sur cette photo</div><div class="empty-hint" style="padding:0">L'IA n'a reconnu aucun aliment — rien n'a été enregistré. Annule et reprends la photo (assiette bien cadrée, bonne lumière), ou saisis à la main via "Aujourd'hui".</div></div>`
+          ? `<div class="card"><div class="error-text" style="font-weight:700;margin-bottom:4px">${t('photoScan.nothingFoundTitle')}</div><div class="empty-hint" style="padding:0">${t('photoScan.nothingFoundBody')}</div></div>`
           : ''
       }
       <div class="card today-totals">
         <div>
-          <div class="today-totals-kcal"><span id="scan-total-kcal">${fmt(totals.kcal)}</span> <span class="empty-hint" style="padding:0">kcal (total)</span></div>
+          <div class="today-totals-kcal"><span id="scan-total-kcal">${fmt(totals.kcal)}</span> <span class="empty-hint" style="padding:0">${t('photoScan.totalKcal')}</span></div>
           <div class="empty-hint" id="scan-total-macros" style="padding:0">P${fmt1(totals.protein_g)} · L${fmt1(totals.fat_g)} · G${fmt1(totals.carb_g)}</div>
         </div>
       </div>
@@ -189,10 +190,10 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
         lastMode === 'receipt'
           ? `
       <div class="card">
-        <label class="field-label">Enregistrer comme…</label>
+        <label class="field-label">${t('photoScan.saveAsLabel')}</label>
         <div class="sort-toggle">
-          <button class="sort-btn ${receiptSaveTarget === 'journal' ? 'active' : ''}" data-action="receipt-target" data-mode="journal">📓 Logger aujourd'hui</button>
-          <button class="sort-btn ${receiptSaveTarget === 'habits' ? 'active' : ''}" data-action="receipt-target" data-mode="habits">💾 Ajouter aux Habitudes</button>
+          <button class="sort-btn ${receiptSaveTarget === 'journal' ? 'active' : ''}" data-action="receipt-target" data-mode="journal">${t('photoScan.saveToJournal')}</button>
+          <button class="sort-btn ${receiptSaveTarget === 'habits' ? 'active' : ''}" data-action="receipt-target" data-mode="habits">${t('photoScan.saveToHabits')}</button>
         </div>
       </div>`
           : ''
@@ -204,12 +205,12 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
             ? ''
             : `<label class="checkbox-label">
           <input type="checkbox" id="scan-save-habit" ${saveAsHabit ? 'checked' : ''}>
-          💾 Sauver ce plat comme habitude (reconnaissance rapide la prochaine fois)
+          ${t('photoScan.saveAsHabit')}
         </label>`
         }
         <div class="form-actions">
-          <button class="btn btn-cancel" data-action="scan-cancel">Annuler</button>
-          <button class="btn btn-save" data-action="scan-confirm" ${rows.length === 0 ? 'disabled' : ''}>✅ Confirmer &amp; logger</button>
+          <button class="btn btn-cancel" data-action="scan-cancel">${t('common.cancel')}</button>
+          <button class="btn btn-save" data-action="scan-confirm" ${rows.length === 0 ? 'disabled' : ''}>${t('photoScan.confirm')}</button>
         </div>
       </div>`;
   }
@@ -218,18 +219,18 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
     let body = '';
     if (state === 'idle') {
       body = `
-        <p class="hint">Prends une photo de ton assiette — l'IA identifie les composants, tu ajustes et confirmes avant tout enregistrement.</p>
-        <button class="btn-cta" data-action="scan-start">📷 Scanner une assiette</button>
-        <p class="hint">Ou scanne directement le code-barres d'un produit emballé.</p>
-        <button class="btn-cta" data-action="scan-barcode-start">🔖 Scanner un code-barres</button>
-        <p class="hint">Ou scanne un ticket de caisse pour ajouter plusieurs articles d'un coup.</p>
-        <button class="btn-cta" data-action="scan-receipt-start">🧾 Scanner un ticket de caisse</button>`;
+        <p class="hint">${t('photoScan.idle.plateHint')}</p>
+        <button class="btn-cta" data-action="scan-start">${t('photoScan.idle.scanPlate')}</button>
+        <p class="hint">${t('photoScan.idle.barcodeHint')}</p>
+        <button class="btn-cta" data-action="scan-barcode-start">${t('photoScan.idle.scanBarcode')}</button>
+        <p class="hint">${t('photoScan.idle.receiptHint')}</p>
+        <button class="btn-cta" data-action="scan-receipt-start">${t('photoScan.idle.scanReceipt')}</button>`;
     } else if (state === 'analyzing') {
-      body = `<div class="card empty-hint">Analyse de la photo en cours…</div>`;
+      body = `<div class="card empty-hint">${t('photoScan.analyzing')}</div>`;
     } else if (state === 'error') {
       body = `
-        <div class="card"><div class="empty-hint error-text">${escapeHtml(errorMsg ?? 'Erreur inconnue')}</div></div>
-        <button class="btn-cta" data-action="scan-reset">Réessayer</button>`;
+        <div class="card"><div class="empty-hint error-text">${escapeHtml(errorMsg ?? t('photoScan.unknownError'))}</div></div>
+        <button class="btn-cta" data-action="scan-reset">${t('photoScan.retry')}</button>`;
     } else {
       body = reviewingHtml();
     }
@@ -241,13 +242,13 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
     if (capture.status === 'cancelled') return; // user backed out — stay idle, no error shown
     lastMode = 'photo';
     if (capture.status === 'permission-denied') {
-      errorMsg = 'Permission appareil photo refusée — autorise l’accès dans les paramètres Android (Applis > Carbs > Autorisations) pour scanner une assiette.';
+      errorMsg = t('photoScan.err.cameraPermissionPlate');
       state = 'error';
       render();
       return;
     }
     if (capture.status === 'error') {
-      errorMsg = `Impossible d’ouvrir l’appareil photo (${capture.message}).`;
+      errorMsg = t('photoScan.err.cameraOpenFailed', { message: capture.message });
       state = 'error';
       render();
       return;
@@ -272,7 +273,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
       expandedRows = defaultExpandedRows(rows);
       rowKcalTouched = new Set();
     } catch (e) {
-      errorMsg = e instanceof MissingMistralKeyError ? e.message : `Analyse impossible (${(e as Error).message}) — vérifie la connexion et réessaie.`;
+      errorMsg = e instanceof MissingMistralKeyError ? e.message : t('photoScan.err.analysisFailed', { message: (e as Error).message });
       state = 'error';
     }
     // photo.base64 falls out of scope here — never stored anywhere else.
@@ -284,13 +285,13 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
     if (capture.status === 'cancelled') return; // user backed out — stay idle, no error shown
     lastMode = 'receipt';
     if (capture.status === 'permission-denied') {
-      errorMsg = 'Permission appareil photo refusée — autorise l’accès dans les paramètres Android (Applis > Carbs > Autorisations) pour scanner un ticket de caisse.';
+      errorMsg = t('photoScan.err.cameraPermissionReceipt');
       state = 'error';
       render();
       return;
     }
     if (capture.status === 'error') {
-      errorMsg = `Impossible d’ouvrir l’appareil photo (${capture.message}).`;
+      errorMsg = t('photoScan.err.cameraOpenFailed', { message: capture.message });
       state = 'error';
       render();
       return;
@@ -309,7 +310,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
       expandedRows = defaultExpandedRows(rows);
       rowKcalTouched = new Set();
     } catch (e) {
-      errorMsg = e instanceof MissingMistralKeyError ? e.message : `Analyse impossible (${(e as Error).message}) — vérifie la connexion et réessaie.`;
+      errorMsg = e instanceof MissingMistralKeyError ? e.message : t('photoScan.err.analysisFailed', { message: (e as Error).message });
       state = 'error';
     }
     // photo.base64 falls out of scope here — never stored anywhere else.
@@ -321,7 +322,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
     if (scan.status === 'cancelled') return; // user backed out of the scanner — stay idle, no error shown
     lastMode = 'barcode';
     if (scan.status === 'error') {
-      errorMsg = `Scan impossible (${scan.message}) — réessaie.`;
+      errorMsg = t('photoScan.err.barcodeScanFailed', { message: scan.message });
       state = 'error';
       render();
       return;
@@ -331,7 +332,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
     render();
     const result = await lookupOFF(scan.code);
     if (result.status === 'not-found') {
-      errorMsg = 'Produit introuvable pour ce code-barres — réessaie, ou utilise le scan photo/la saisie manuelle.';
+      errorMsg = t('photoScan.err.barcodeNotFound');
       state = 'error';
     } else if (result.status === 'error') {
       errorMsg = result.message;
@@ -523,7 +524,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
       try {
         row.offResults = await searchOFF(row.label);
       } catch {
-        row.offError = 'Recherche impossible — vérifier la connexion.';
+        row.offError = t('foodEntry.searchError');
         row.offResults = [];
       }
       row.offSearching = false;
@@ -606,7 +607,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
           const habits = await repos.habits.load();
           habits.push({
             id: uid(),
-            label: recognizedHabitLabel ?? overallNote.slice(0, 40) ?? 'Plat scanné',
+            label: recognizedHabitLabel ?? overallNote.slice(0, 40) ?? t('photoScan.scannedDishFallbackLabel'),
             off_code: null,
             source: 'ai',
             portion_g: totalGrams,
