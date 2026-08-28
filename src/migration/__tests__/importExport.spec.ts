@@ -232,7 +232,7 @@ describe('runImport', () => {
     const result = await runImport(repos, blob, true, NOW);
     expect(result.ok).toBe(true);
     expect(await repos.profile.load()).toEqual({ height_cm: 180, age: 30, sex: 'male', weight_default_kg: 80, weight_start_kg: 85, weight_goal_kg: 75 });
-    expect(await repos.theme.load()).toEqual({ mode: 'dark', accentHue: 200 });
+    expect(await repos.theme.load()).toEqual({ mode: 'dark', accentHue: 200, lang: 'fr' });
   });
 
   it('ai_footprint: sums per-feature counters with existing data instead of overwriting', async () => {
