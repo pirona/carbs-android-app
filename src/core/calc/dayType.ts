@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import type { DayType, PlaisirOverrides, Profile, Thresholds } from '../types';
-import { PLAISIR_LEVELS } from '../types';
+import type { DayType, PlaisirLevel, PlaisirOverrides, Profile, Thresholds } from '../types';
 import { formatDateKey } from './date';
 import { stepsToActiveKcal } from './macros';
 
@@ -13,13 +12,20 @@ export interface DayTypeSignals {
   exerciseMin: number | null;
 }
 
+// Structured instead of a pre-built French sentence — this is core/ logic, no i18n dependency
+// here; the UI layer (DayScreen.ts) turns this into text via t(), so the same signals render in
+// whichever language is active. Never persisted (see DaySnapshot/DayEntry — only `.type` is
+// written to storage), so this shape is free to change without a data migration.
+export type DayTypeSource =
+  | { kind: 'plaisirOverride'; level: PlaisirLevel }
+  | { kind: 'stepsAndSport'; steps: number | null; stepKcal: number; sportKcal: number | null; total: number }
+  | { kind: 'activeCalories'; steps: number | null; stepKcal: number; activeKcal: number; total: number }
+  | { kind: 'exerciseMin'; min: number; low: boolean }
+  | { kind: 'weekSchedule'; dow: number };
+
 export interface DayTypeResult {
   type: DayType;
-  source: string;
-}
-
-function fmt(n: number): string {
-  return Math.round(n).toLocaleString('fr-FR');
+  source: DayTypeSource;
 }
 
 // Port of carb-cycling.html:554-624, with branch 1 (HA `total_calories` sensor delta,
@@ -37,13 +43,11 @@ export function detectDayType(
 ): DayTypeResult {
   const t = thresholds;
   const wkg = weightKg || profile.weight_default_kg;
-  const DAYS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
   // 0 — Override plaisir manuel (semainier)
   const todayLevel = overrides.levels[formatDateKey(today)];
   if (todayLevel) {
-    const lvl = PLAISIR_LEVELS[todayLevel];
-    return { type: 'plaisir', source: `semainier — ${lvl?.label ?? ''} (${lvl?.kcal ?? 0} kcal)` };
+    return { type: 'plaisir', source: { kind: 'plaisirOverride', level: todayLevel } };
   }
 
   // 1 — Combiné : kcal pas estimées + kcal sport saisies (branche primaire)
@@ -51,10 +55,7 @@ export function detectDayType(
     const stepKcal = signals.steps !== null ? stepsToActiveKcal(signals.steps, wkg, profile) : 0;
     const sportKcal = signals.sportKcal !== null ? signals.sportKcal : 0;
     const total = stepKcal + sportKcal;
-    const parts: string[] = [];
-    if (signals.steps !== null) parts.push(`${fmt(signals.steps)} pas (~${fmt(stepKcal)} kcal)`);
-    if (signals.sportKcal !== null) parts.push(`${fmt(sportKcal)} kcal sport`);
-    const src = `${parts.join(' + ')} = ~${fmt(total)} kcal actives`;
+    const src: DayTypeSource = { kind: 'stepsAndSport', steps: signals.steps, stepKcal, sportKcal: signals.sportKcal, total };
     if (total > t.high_active_kcal) return { type: 'high', source: src };
     if (total > t.medium_active_kcal) return { type: 'medium', source: src };
     return { type: 'low', source: src };
@@ -64,10 +65,7 @@ export function detectDayType(
   if (signals.activeCaloriesKcal !== null) {
     const stepKcal = signals.steps !== null ? stepsToActiveKcal(signals.steps, wkg, profile) : 0;
     const total = signals.activeCaloriesKcal + stepKcal;
-    const src =
-      signals.steps !== null
-        ? `actives ${fmt(signals.activeCaloriesKcal)} + pas ~${fmt(stepKcal)} = ~${fmt(total)} kcal`
-        : `actives ${fmt(signals.activeCaloriesKcal)} kcal`;
+    const src: DayTypeSource = { kind: 'activeCalories', steps: signals.steps, stepKcal, activeKcal: signals.activeCaloriesKcal, total };
     if (total > t.high_active_kcal) return { type: 'high', source: src };
     if (total > t.medium_active_kcal) return { type: 'medium', source: src };
     return { type: 'low', source: src };
@@ -75,14 +73,13 @@ export function detectDayType(
 
   // 3 — Minutes exercice
   if (signals.exerciseMin !== null) {
-    if (signals.exerciseMin > t.high_exercise_min)
-      return { type: 'high', source: `${Math.round(signals.exerciseMin)} min exercice` };
-    if (signals.exerciseMin > t.medium_exercise_min)
-      return { type: 'medium', source: `${Math.round(signals.exerciseMin)} min exercice` };
-    return { type: 'low', source: `${Math.round(signals.exerciseMin)} min exercice (faible)` };
+    const min = Math.round(signals.exerciseMin);
+    if (signals.exerciseMin > t.high_exercise_min) return { type: 'high', source: { kind: 'exerciseMin', min, low: false } };
+    if (signals.exerciseMin > t.medium_exercise_min) return { type: 'medium', source: { kind: 'exerciseMin', min, low: false } };
+    return { type: 'low', source: { kind: 'exerciseMin', min, low: true } };
   }
 
   // 4 — Fallback planning semaine
   const dow = today.getDay();
-  return { type: schedule[dow] ?? 'medium', source: `planning semaine (${DAYS[dow]})` };
+  return { type: schedule[dow] ?? 'medium', source: { kind: 'weekSchedule', dow } };
 }

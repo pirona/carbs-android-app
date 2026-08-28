@@ -41,18 +41,19 @@ export const DEFAULT_DAY_SCHEDULE: Record<number, DayType> = {
   6: 'high',
 };
 
+// Non-text data only — label/desc text lives in src/ui/i18n/strings.ts under
+// `plaisir.<level>.label`/`.desc` (screens call t() for the text, this stays icon/kcal only so
+// this file has no i18n dependency).
 export interface PlaisirLevelInfo {
   kcal: number;
   icon: string;
-  label: string;
-  desc: string;
 }
 
 // carb-cycling.html:420-424
 export const PLAISIR_LEVELS: Record<PlaisirLevel, PlaisirLevelInfo> = {
-  leger: { kcal: 350, icon: '🍺', label: 'Léger', desc: 'Dessert, 1-2 bières, glace' },
-  moyen: { kcal: 650, icon: '🍺🍺', label: 'Moyen', desc: 'Pizza, fajitas, restau' },
-  lourd: { kcal: 1000, icon: '🍺🍺🍺', label: 'Lourd', desc: 'Soirée alcool + bouffe' },
+  leger: { kcal: 350, icon: '🍺' },
+  moyen: { kcal: 650, icon: '🍺🍺' },
+  lourd: { kcal: 1000, icon: '🍺🍺🍺' },
 };
 
 // carb-cycling.html:425
@@ -62,11 +63,13 @@ export const PLAISIR_CYCLE: (PlaisirLevel | null)[] = [null, 'leger', 'moyen', '
 // meals (the "hors-repas" bucket the Conseils screen groups those under).
 export type MealSlot = 'petit_dej' | 'dejeuner' | 'diner' | 'collation';
 export const MEAL_SLOT_ORDER: MealSlot[] = ['petit_dej', 'dejeuner', 'diner', 'collation'];
-export const MEAL_SLOT_LABEL: Record<MealSlot, string> = {
-  petit_dej: '☀️ Petit-déjeuner',
-  dejeuner: '🍽️ Déjeuner',
-  diner: '🌙 Dîner',
-  collation: '🍎 Hors-repas',
+// Icon only — label text lives in src/ui/i18n/strings.ts under `mealSlot.<slot>` (same split
+// rationale as PLAISIR_LEVELS above).
+export const MEAL_SLOT_ICON: Record<MealSlot, string> = {
+  petit_dej: '☀️',
+  dejeuner: '🍽️',
+  diner: '🌙',
+  collation: '🍎',
 };
 
 // carb-cycling.html:450-453

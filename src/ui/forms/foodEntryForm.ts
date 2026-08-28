@@ -13,9 +13,10 @@
 // (Day honors OFF's serving_size for the default portion, Habits doesn't) — left untouched
 // in each screen so this extraction doesn't quietly change either one's behavior.
 import type { Habit, MealSlot, Per100 } from '../../core/types';
-import { MEAL_SLOT_LABEL, MEAL_SLOT_ORDER } from '../../core/types';
+import { MEAL_SLOT_ICON, MEAL_SLOT_ORDER } from '../../core/types';
 import { computeFoodMacros, kcalFromMacros } from '../../core/calc/food';
 import { escapeHtml, fmt1 } from '../util';
+import { t } from '../i18n/strings';
 import { searchOFF, type OffProduct } from '../../integrations/openFoodFacts';
 import { scanBarcode, lookupOFF } from '../../integrations/barcodeScan';
 import { parseFoodText } from '../../integrations/mistralFoodParse';
@@ -62,26 +63,27 @@ export function renderPer100FieldsHtml(
   opts: { portionExtraHtml?: string; previewWithPortion?: boolean } = {},
 ): string {
   const m = computeFoodMacros(prefill.per100, prefill.portion_g);
+  const previewVars = { portion: prefill.portion_g, kcal: m.kcal, prot: fmt1(m.protein_g), fat: fmt1(m.fat_g), carb: fmt1(m.carb_g) };
   const previewText =
     opts.previewWithPortion === false
-      ? `${m.kcal} kcal · P${fmt1(m.protein_g)} L${fmt1(m.fat_g)} G${fmt1(m.carb_g)}`
-      : `Pour ${prefill.portion_g} g : ${m.kcal} kcal · P${fmt1(m.protein_g)} L${fmt1(m.fat_g)} G${fmt1(m.carb_g)}`;
+      ? t('foodEntry.previewCompact', previewVars)
+      : t('foodEntry.previewWithPortion', previewVars);
   return `
-    <label class="field-label">Nom</label>
+    <label class="field-label">${t('foodEntry.name')}</label>
     <input type="text" ${fieldAttr(addr, 'label')} value="${escapeHtml(prefill.label)}">
     <div class="field-row">
       <div>
-        <label class="field-label">Portion (g)</label>
+        <label class="field-label">${t('foodEntry.portion')}</label>
         <input type="number" ${fieldAttr(addr, 'portion')} value="${prefill.portion_g}" min="1">
         ${opts.portionExtraHtml ?? ''}
       </div>
-      <div><label class="field-label">kcal / 100g</label><input type="number" ${fieldAttr(addr, 'kcal')} value="${prefill.per100.kcal}" step="0.1"></div>
+      <div><label class="field-label">${t('foodEntry.kcalPer100')}</label><input type="number" ${fieldAttr(addr, 'kcal')} value="${prefill.per100.kcal}" step="0.1"></div>
     </div>
     <div class="field-row">
-      <div><label class="field-label">Protéines / 100g</label><input type="number" ${fieldAttr(addr, 'prot')} value="${prefill.per100.protein_g}" step="0.1"></div>
-      <div><label class="field-label">Lipides / 100g</label><input type="number" ${fieldAttr(addr, 'fat')} value="${prefill.per100.fat_g}" step="0.1"></div>
+      <div><label class="field-label">${t('foodEntry.proteinPer100')}</label><input type="number" ${fieldAttr(addr, 'prot')} value="${prefill.per100.protein_g}" step="0.1"></div>
+      <div><label class="field-label">${t('foodEntry.fatPer100')}</label><input type="number" ${fieldAttr(addr, 'fat')} value="${prefill.per100.fat_g}" step="0.1"></div>
     </div>
-    <label class="field-label">Glucides / 100g</label>
+    <label class="field-label">${t('foodEntry.carbPer100')}</label>
     <input type="number" ${fieldAttr(addr, 'carb')} value="${prefill.per100.carb_g}" step="0.1">
     <div ${totalPreviewAttrs(addr)} style="padding:4px 0 0">${previewText}</div>`;
 }
@@ -91,9 +93,9 @@ export function renderPer100FieldsHtml(
 // itself, not on an eaten instance). Read the chosen value straight from the DOM at save
 // time via `id`, same pattern as the per100 fields above — no extra state needed.
 export function renderMealSlotSelectHtml(id: string, selected: MealSlot | null, opts: { allowUnset?: boolean } = {}): string {
-  const unsetOption = opts.allowUnset ? `<option value="" ${!selected ? 'selected' : ''}>Non classé</option>` : '';
-  const options = MEAL_SLOT_ORDER.map((slot) => `<option value="${slot}" ${selected === slot ? 'selected' : ''}>${MEAL_SLOT_LABEL[slot]}</option>`).join('');
-  return `<label class="field-label">Repas</label><select id="${id}">${unsetOption}${options}</select>`;
+  const unsetOption = opts.allowUnset ? `<option value="" ${!selected ? 'selected' : ''}>${t('foodEntry.mealSlotUnset')}</option>` : '';
+  const options = MEAL_SLOT_ORDER.map((slot) => `<option value="${slot}" ${selected === slot ? 'selected' : ''}>${MEAL_SLOT_ICON[slot]} ${t(`mealSlot.${slot}`)}</option>`).join('');
+  return `<label class="field-label">${t('mealSlot.label')}</label><select id="${id}">${unsetOption}${options}</select>`;
 }
 
 export interface FoodEntryConfirmActions {
@@ -119,18 +121,18 @@ export function renderFoodConfirmStepHtml(
         prefill.source === 'ai'
           ? `
         <div class="ai-banner">
-          <div class="ai-banner-title">🤖 Estimation IA — à vérifier</div>
-          <div>Entrée : « ${escapeHtml(prefill.ai_source_text)} »</div>
-          ${prefill.ai_confidence ? `<div>Confiance : ${escapeHtml(prefill.ai_confidence)}</div>` : ''}
-          ${prefill.ai_note ? `<div>Remarque : ${escapeHtml(prefill.ai_note)}</div>` : ''}
+          <div class="ai-banner-title">${t('foodEntry.aiBannerTitle')}</div>
+          <div>${t('foodEntry.aiEntry', { text: escapeHtml(prefill.ai_source_text) })}</div>
+          ${prefill.ai_confidence ? `<div>${t('foodEntry.aiConfidence', { confidence: escapeHtml(prefill.ai_confidence) })}</div>` : ''}
+          ${prefill.ai_note ? `<div>${t('foodEntry.aiNote', { note: escapeHtml(prefill.ai_note) })}</div>` : ''}
         </div>`
           : ''
       }
       ${renderPer100FieldsHtml(prefill, { prefix: opts.idPrefix, mode: 'id' }, { portionExtraHtml: opts.portionExtraHtml })}
       ${opts.afterFieldsHtml ?? ''}
       <div class="form-actions">
-        <button class="btn btn-cancel" data-action="${opts.actions.cancel}">Annuler</button>
-        <button class="btn btn-save" data-action="${opts.actions.save}">Enregistrer</button>
+        <button class="btn btn-cancel" data-action="${opts.actions.cancel}">${t('common.cancel')}</button>
+        <button class="btn btn-save" data-action="${opts.actions.save}">${t('common.save')}</button>
       </div>
     </div>`;
 }
@@ -155,7 +157,7 @@ export function updateFoodEntryTotalPreview(container: HTMLElement, idPrefix: st
     carb_g: parseFloat(carbInput.value) || 0,
   };
   const m = computeFoodMacros(per100, portion);
-  preview.textContent = `Pour ${portion} g : ${m.kcal} kcal · P${fmt1(m.protein_g)} L${fmt1(m.fat_g)} G${fmt1(m.carb_g)}`;
+  preview.textContent = t('foodEntry.previewWithPortion', { portion, kcal: m.kcal, prot: fmt1(m.protein_g), fat: fmt1(m.fat_g), carb: fmt1(m.carb_g) });
 }
 
 // Shared "input" handler logic for id-addressed confirm-step forms (Day/Habits) — the
@@ -188,7 +190,7 @@ export async function searchOffProducts(query: string): Promise<SearchOffResult>
   try {
     return { ok: true, results: await searchOFF(query) };
   } catch {
-    return { ok: false, error: 'Recherche impossible — vérifier la connexion.' };
+    return { ok: false, error: t('foodEntry.searchError') };
   }
 }
 
@@ -197,7 +199,7 @@ export type BarcodeLookupResult = { status: 'cancelled' } | { status: 'error'; m
 export async function scanBarcodeAndLookup(): Promise<BarcodeLookupResult> {
   const scan = await scanBarcode();
   if (scan.status === 'cancelled') return { status: 'cancelled' };
-  if (scan.status === 'error') return { status: 'error', message: `Scan impossible (${scan.message})` };
+  if (scan.status === 'error') return { status: 'error', message: t('foodEntry.scanError', { message: scan.message }) };
   const result = await lookupOFF(scan.code);
   if (result.status === 'not-found') return { status: 'not-found' };
   if (result.status === 'error') return { status: 'error', message: result.message };
@@ -226,6 +228,6 @@ export async function interpretFoodTextWithAI(text: string): Promise<AiInterpret
     };
   } catch (e) {
     if (e instanceof MissingMistralKeyError) return { ok: false, error: e.message };
-    return { ok: false, error: `Interprétation impossible (${(e as Error).message}) — réessaie ou saisis à la main.` };
+    return { ok: false, error: t('foodEntry.aiInterpretError', { message: (e as Error).message }) };
   }
 }

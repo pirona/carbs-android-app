@@ -21,7 +21,8 @@
 // never re-calls Mistral for a day already analyzed — "🔄 Régénérer" is the only way to
 // overwrite it — and past conseils stay browsable in the collapsible history section below.
 import type { DayEntry, DayType, LogEntry, MealSlot, Profile } from '../../core/types';
-import { MEAL_SLOT_ORDER, MEAL_SLOT_LABEL } from '../../core/types';
+import { MEAL_SLOT_ORDER, MEAL_SLOT_ICON } from '../../core/types';
+import { t } from '../i18n/strings';
 import { groupByMeal, foodTotals } from '../../core/calc/mealGroup';
 import { assessCompleteness, type AdviceCompleteness } from '../../core/calc/adviceCompleteness';
 import { computeFoodMacros } from '../../core/calc/food';
@@ -159,7 +160,7 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
     const totals = foodTotals(entries);
     return `
       <div class="form-block" data-meal-section="${slot}">
-        <div class="list-header"><span style="font-size:13px;font-weight:600">${MEAL_SLOT_LABEL[slot]}</span><span class="empty-hint" style="padding:0">${fmt(totals.kcal)} kcal</span></div>
+        <div class="list-header"><span style="font-size:13px;font-weight:600">${MEAL_SLOT_ICON[slot]} ${t(`mealSlot.${slot}`)}</span><span class="empty-hint" style="padding:0">${fmt(totals.kcal)} kcal</span></div>
         ${
           entries.length === 0
             ? '<div class="empty-hint">Rien ici.</div>'

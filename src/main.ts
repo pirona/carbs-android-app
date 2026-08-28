@@ -27,6 +27,7 @@ import { buildExportBlob } from './migration/exportDump';
 import { applyTheme } from './ui/theme';
 import { attachSwipeNav } from './ui/swipeNav';
 import { iconHome, iconTrendingUp, iconPhotoCamera, iconCalendarMonth, iconRestaurantMenu, iconSettings, iconLightbulb } from './ui/icons';
+import { setLang, t, type Lang, type StringKey } from './ui/i18n/strings';
 
 const storage = new PreferencesStorageAdapter();
 const healthConnect = new CapgoHealthConnectAdapter();
@@ -44,9 +45,12 @@ const aiFootprint = new AiFootprintRepo(storage);
 const theme = new ThemeRepo(storage);
 const nextcloud = new NextcloudRepo(storage);
 
-// Applied as early as possible — a brief flash of the default theme before the stored
+// Applied as early as possible — a brief flash of the default theme/language before the stored
 // preference loads is an acceptable tradeoff for Preferences' async-only read API.
-theme.load().then(applyTheme);
+theme.load().then((settings) => {
+  applyTheme(settings);
+  applyLanguage(settings.lang);
+});
 
 // Silent, fire-and-forget: a failed auto-backup must never block or interrupt app
 // startup. Errors just leave lastBackupOk=false, surfaced next time Settings is opened.
@@ -87,7 +91,7 @@ const conseilsRepos: ConseilsScreenRepos = { dayHistory, foodLogHistory, carbAdv
 type TabId = 'day' | 'progress' | 'scan' | 'week' | 'habits' | 'settings' | 'conseils';
 interface TabDef {
   id: TabId;
-  label: string;
+  labelKey: StringKey;
   render: (el: HTMLElement) => void;
 }
 
@@ -97,18 +101,18 @@ interface TabDef {
 // belong here: it's not a frequent daily destination, so it lives as a top-app-bar icon instead
 // (see #topbar-settings below), present on every screen regardless of which tab is active.
 const PRIMARY_TABS: (TabDef & { icon: () => string })[] = [
-  { id: 'day', icon: iconHome, label: 'Jour', render: (el) => renderDayScreen(el, dayRepos, healthConnect) },
-  { id: 'progress', icon: iconTrendingUp, label: 'Progrès', render: (el) => renderProgressScreen(el, progressRepos) },
-  { id: 'scan', icon: iconPhotoCamera, label: 'Scan', render: (el) => renderPhotoScanScreen(el, photoScanRepos) },
-  { id: 'week', icon: iconCalendarMonth, label: 'Semaine', render: (el) => renderWeekScreen(el, weekRepos) },
-  { id: 'habits', icon: iconRestaurantMenu, label: 'Habitudes', render: (el) => renderHabitsScreen(el, { habits }) },
+  { id: 'day', icon: iconHome, labelKey: 'nav.day', render: (el) => renderDayScreen(el, dayRepos, healthConnect) },
+  { id: 'progress', icon: iconTrendingUp, labelKey: 'nav.progress', render: (el) => renderProgressScreen(el, progressRepos) },
+  { id: 'scan', icon: iconPhotoCamera, labelKey: 'nav.scan', render: (el) => renderPhotoScanScreen(el, photoScanRepos) },
+  { id: 'week', icon: iconCalendarMonth, labelKey: 'nav.week', render: (el) => renderWeekScreen(el, weekRepos) },
+  { id: 'habits', icon: iconRestaurantMenu, labelKey: 'nav.habits', render: (el) => renderHabitsScreen(el, { habits }) },
 ];
 
 // Conseils shares the same "not a several-times-a-day destination" reasoning as Réglages (see
 // PRIMARY_TABS comment above) — a once-in-a-while check-in after a fully-logged day, not a
 // recurring tab worth the 6th bottom-nav slot M3 doesn't recommend.
-const CONSEILS_TAB: TabDef = { id: 'conseils', label: 'Conseils', render: (el) => renderConseilsScreen(el, conseilsRepos) };
-const SETTINGS_TAB: TabDef = { id: 'settings', label: 'Réglages', render: (el) => renderSettingsScreen(el, settingsRepos, storage) };
+const CONSEILS_TAB: TabDef = { id: 'conseils', labelKey: 'nav.conseils', render: (el) => renderConseilsScreen(el, conseilsRepos) };
+const SETTINGS_TAB: TabDef = { id: 'settings', labelKey: 'nav.settings', render: (el) => renderSettingsScreen(el, settingsRepos, storage, applyLanguage) };
 
 const ALL_TABS: TabDef[] = [...PRIMARY_TABS, CONSEILS_TAB, SETTINGS_TAB];
 
@@ -118,8 +122,8 @@ app.innerHTML = `
     <div id="topbar-inner">
       <img id="topbar-logo" src="/logo-taco-chick.png" alt="">
       <h1 id="topbar-title"></h1>
-      <button class="topbar-icon" id="topbar-conseils" data-tab="conseils" aria-label="Conseils">${iconLightbulb()}</button>
-      <button class="topbar-icon" id="topbar-settings" data-tab="settings" aria-label="Réglages">${iconSettings()}</button>
+      <button class="topbar-icon" id="topbar-conseils" data-tab="conseils" aria-label="">${iconLightbulb()}</button>
+      <button class="topbar-icon" id="topbar-settings" data-tab="settings" aria-label="">${iconSettings()}</button>
     </div>
   </header>
   <div id="screen-viewport">
@@ -128,10 +132,10 @@ app.innerHTML = `
   <nav id="tabs">
     <div id="tabs-inner">
       ${PRIMARY_TABS.map(
-        (t) => `
-        <button class="nav-item" data-tab="${t.id}">
-          <span class="nav-icon">${t.icon()}</span>
-          <span class="nav-label">${t.label}</span>
+        (tab) => `
+        <button class="nav-item" data-tab="${tab.id}">
+          <span class="nav-icon">${tab.icon()}</span>
+          <span class="nav-label"></span>
         </button>`,
       ).join('')}
     </div>
@@ -139,17 +143,19 @@ app.innerHTML = `
 `;
 
 let screen = app.querySelector<HTMLDivElement>('#screen')!;
+let currentTab: TabId = 'day';
 const topbarTitle = app.querySelector<HTMLHeadingElement>('#topbar-title')!;
 const topbarConseils = app.querySelector<HTMLButtonElement>('#topbar-conseils')!;
 const topbarSettings = app.querySelector<HTMLButtonElement>('#topbar-settings')!;
 const navItems = app.querySelectorAll<HTMLButtonElement>('#tabs [data-tab]');
 
 function showTab(id: TabId) {
+  currentTab = id;
   const tab = ALL_TABS.find((t) => t.id === id)!;
   navItems.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === id));
   topbarConseils.classList.toggle('active', id === 'conseils');
   topbarSettings.classList.toggle('active', id === 'settings');
-  topbarTitle.textContent = tab.label;
+  topbarTitle.textContent = t(tab.labelKey);
   // Each screen module attaches its own click/change listeners directly on the container
   // it's given (see DayScreen etc.) — reusing the same node across renders would stack a
   // new listener on top of every previous one, firing actions multiple times per tap.
@@ -164,6 +170,22 @@ function showTab(id: TabId) {
   screen.replaceWith(fresh);
   screen = fresh;
   tab.render(screen);
+}
+
+// Language changes touch text baked outside the showTab() re-render cycle (topbar title, the
+// always-visible tab-bar labels, the 2 icon buttons' aria-labels) — unlike theme (a CSS var,
+// propagates for free), so this explicitly refreshes the persistent chrome AND re-runs the
+// active screen's render() with the new language. Called once at boot and again from the
+// language toggle in Réglages (passed into renderSettingsScreen as a callback, since that
+// screen can't import this closure-bound function the way it imports the standalone applyTheme).
+function applyLanguage(lang: Lang) {
+  setLang(lang);
+  navItems.forEach((btn, i) => {
+    btn.querySelector<HTMLSpanElement>('.nav-label')!.textContent = t(PRIMARY_TABS[i].labelKey);
+  });
+  topbarConseils.setAttribute('aria-label', t('nav.conseils'));
+  topbarSettings.setAttribute('aria-label', t('nav.settings'));
+  showTab(currentTab);
 }
 
 navItems.forEach((btn) => btn.addEventListener('click', () => showTab(btn.dataset.tab as TabId)));
