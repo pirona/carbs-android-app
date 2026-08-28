@@ -1,10 +1,38 @@
 # Carbs
 
-Android app (Capacitor) for personal nutrition/carb-cycling tracking — calorie deficit,
-macros, day-type detection (HIGH/MEDIUM/LOW), and photo-based food logging.
+An Android app for carb-cycling and nutrition tracking — calorie deficit, macros, day-type
+detection (HIGH/MEDIUM/LOW/PLAISIR), and photo-based food logging (plate scan, receipt scan,
+barcode scan, or just describe what you ate in plain language).
 
-Replaces a Home Assistant/Lovelace-hosted prototype (`carb-cycling.html`, `food-habits.html`,
-`menus.html` in the `carbs-home-assistant` repo). Personal-use project, not commercial software.
+## ⚠️ Not medical advice
+
+This app is a personal tracking tool, not a substitute for professional care. It does not
+replace a registered dietitian, a doctor, or any other healthcare provider — nothing it shows
+you is a diagnosis or an individualized medical recommendation. The optional AI-generated advice
+is explicitly restricted to general, well-established principles from recognized public-health
+bodies (ANSES, HAS, EFSA, WHO — see [AI prompts](#ai-prompts) below), never a specific figure or
+study it isn't sure of. Use your own judgment, and talk to an actual professional about your own
+health, especially if you have a medical condition, are pregnant, or are otherwise in a
+situation where general nutrition principles for a healthy adult don't apply to you.
+
+## 🌍 Aware of its own footprint
+
+Every AI feature in this app runs on Mistral, and the app tracks — and shows you, in
+Settings — an estimate of the carbon and water footprint of its own AI usage, converted from
+real token counts using Mistral's own published life-cycle assessment (with ADEME and
+Carbone 4). The point isn't to guilt-trip anyone over grams of CO2 — it's to make an otherwise
+invisible cost visible, so using AI stays a deliberate choice rather than a reflex. See
+[`src/core/calc/aiFootprint.ts`](src/core/calc/aiFootprint.ts) for the exact methodology and
+sources.
+
+## Data & AI sources
+
+- Nutrition data for photo/barcode scans: [OpenFoodFacts](https://world.openfoodfacts.org/) and
+  ANSES-CIQUAL 2020 (Licence Ouverte / Etalab) — both belong to their respective authors, used
+  here only as a reference, never as this app's own claim of accuracy.
+- AI: [Mistral AI](https://mistral.ai/) — the only AI provider this app talks to, no other
+  model/vendor is involved anywhere. See [AI prompts](#ai-prompts) for exactly what's sent and
+  why.
 
 ## License
 
@@ -27,20 +55,16 @@ npx cap sync android  # sync web build + plugins into the Android project
 ./build-debug.sh      # web build + cap sync + debug APK (JDK/SDK auto-detected)
 ```
 
-`build-debug.sh` auto-detects JDK 21 at `~/jdk21` if the system JDK is too recent for Gradle
-8.x (same pattern as the SheetHappens/postiz-android build scripts on this machine).
-
 ## AI prompts
 
-Four optional AI features call the Mistral API directly from the app — Mistral is the only AI
-provider this app talks to, no other model/vendor is involved anywhere — using an API key the
-user enters in Settings and stores encrypted on-device (Android Keystore) — never in plain text,
-and never included in the export/backup blob (unlike the Nextcloud app password, which is
-included there on an earlier explicit choice; the Mistral key must be re-entered after a
-wipe/reinstall or a restore from backup). Each call receives only what the task needs — raw
-text, one photo, or nutrition numbers already computed by the app — never account data or
-history. In every case the AI's output is a suggestion: the user reviews and can edit it, and
-nothing is ever saved automatically.
+Four optional AI features call the Mistral API directly from the app, using an API key you
+enter in Settings and that's stored encrypted on-device (Android Keystore) — never in plain
+text, and never included in the export/backup blob (unlike the Nextcloud app password, which
+is included there by explicit choice; the Mistral key must be re-entered after a wipe/reinstall
+or a restore from backup). Each call receives only what the task needs — raw text, one photo, or
+nutrition numbers already computed by the app — never account data or history. In every case the
+AI's output is a suggestion: you review it and can edit it, and nothing is ever saved
+automatically.
 
 The photo-scan features in particular are not always reliable — vision models can misidentify
 what's on the photo (see `PhotoScanScreen`'s human-confirmation step, never an auto-save). Treat
@@ -58,19 +82,11 @@ below is never just a description — the file is the source of truth:
 - [`src/integrations/mistralCarbAdvice.ts`](src/integrations/mistralCarbAdvice.ts) —
   caloric-deficit advice on a fully-logged past day
 
-The first three (text/plate/receipt) used to relay through webhooks on a self-hosted n8n
-instance instead of calling Mistral directly. The original n8n workflow exports are kept in the
-repo as historical reference — [`n8n_food_parse_workflow.json`](n8n_food_parse_workflow.json),
-[`n8n_food_vision_workflow.json`](n8n_food_vision_workflow.json),
-[`n8n_carb_advice_workflow.json`](n8n_carb_advice_workflow.json) — but are disabled on the n8n
-instance and no longer used by the app. Receipt scanning was added after the n8n retirement, so
-it has no n8n-era equivalent.
-
 ### Food Parse — natural-language food entry
 
 Model `mistral-small-latest`, tool calling (`tool_choice: "any"`), a single tool
 `extract_nutrition`. There is no separate system prompt — the tool's JSON schema description
-*is* the instruction, and the user's raw text is passed through unchanged as the only message:
+*is* the instruction, and your raw text is passed through unchanged as the only message:
 
 ```
 Tool: extract_nutrition
@@ -81,7 +97,7 @@ et mettre confidence à low ou medium."
 Parameters: label, portion_g, kcal_100g, protein_100g, fat_100g, carb_100g,
 confidence ("high"|"medium"|"low"), note
 
-Message: { role: "user", content: <the text the user typed> }
+Message: { role: "user", content: <the text you typed> }
 ```
 
 ### Food Vision — photo-of-a-plate scan
@@ -143,7 +159,7 @@ shopping receipt typically spans several future meals rather than being eaten al
 
 Model `mistral-large-latest`, temperature 0.3, `response_format: json_object`. Unlike the two
 tool-calling flows above, this one gets a full system prompt (verbatim, from
-`mistralCarbAdvice.ts` — ported unchanged from the retired n8n workflow's "Build Prompt" node):
+`mistralCarbAdvice.ts`):
 
 > Tu es un assistant nutrition qui donne des conseils de déficit calorique fondés EXCLUSIVEMENT
 > sur les recommandations d'organismes de santé publique reconnus scientifiquement :
@@ -188,5 +204,17 @@ totals, per-meal breakdown; the model never recomputes anything itself):
 > jour (carb cycling) et de la répartition par repas (petit_dej / dejeuner / diner / collation =
 > hors-repas).
 
-This is the literal string in `mistralCarbAdvice.ts`, ported unchanged from n8n's former "Build
-Prompt" node (verified byte-identical at the time of the port).
+## On the code
+
+This app was built with [Claude Code](https://claude.com/claude-code). I'm a Linux/Kubernetes
+systems engineer, not a mobile developer — what's mine here is the architecture, the specs, the
+on-device validation of every feature before it shipped, and the debugging when something didn't
+actually work. The tool amplifies, it doesn't invent what you don't already know how to think.
+
+## About
+
+Not commercial software. This is a tool I built for myself — it helps me, and I use it every
+day — and I'm sharing it as-is. Love it, or move along.
+
+No pressure at all, but if you'd like to buy me a coffee for this or anything else I build,
+gracious donations are always welcome: [ko-fi.com/billisdead](https://ko-fi.com/billisdead)
