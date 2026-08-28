@@ -4,9 +4,9 @@ import type { AdviceCompleteness } from '../core/calc/adviceCompleteness';
 import { callMistralChat, extractJsonModeContent, requireMistralApiKey, recordMistralUsage } from './mistralClient';
 
 // Direct client call to api.mistral.ai — replaces the retired n8n webhook relay. System
-// prompt below is a verbatim port of n8n_carb_advice_workflow.json's "Build Prompt" node
-// (kept in the repo as historical reference, workflow disabled) — do not paraphrase, these
-// are the health-sourcing guardrails (ANSES/HAS/EFSA/WHO only, never invent a figure/source).
+// prompt below is a verbatim port of the retired n8n workflow's "Build Prompt" node — do not
+// paraphrase, these are the health-sourcing guardrails (ANSES/HAS/EFSA/WHO only, never invent
+// a figure/source).
 export interface CarbAdviceMealItem {
   label: string;
   portion_g: number;

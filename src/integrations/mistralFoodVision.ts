@@ -2,8 +2,8 @@
 import { callMistralChat, extractToolCallArguments, requireMistralApiKey, recordMistralUsage } from './mistralClient';
 
 // Direct client call to api.mistral.ai — replaces the retired n8n webhook relay. Tool
-// schema/prompt below is a verbatim port of n8n_food_vision_workflow.json's "Mistral —
-// extract_plate" node (kept in the repo as historical reference, workflow disabled).
+// schema/prompt below is a verbatim port of the retired n8n workflow's "Mistral —
+// extract_plate" node.
 export interface PlateComponent {
   label: string;
   estimated_grams: number;

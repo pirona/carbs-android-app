@@ -3,8 +3,8 @@ import type { Per100 } from '../core/types';
 import { callMistralChat, extractToolCallArguments, requireMistralApiKey, recordMistralUsage } from './mistralClient';
 
 // Direct client call to api.mistral.ai — replaces the retired n8n webhook relay. Tool
-// schema/prompt below is a verbatim port of n8n_food_parse_workflow.json's "Mistral —
-// extract_nutrition" node (kept in the repo as historical reference, workflow disabled).
+// schema/prompt below is a verbatim port of the retired n8n workflow's "Mistral —
+// extract_nutrition" node.
 export interface FoodParseResult {
   label: string;
   portion_g: number;
