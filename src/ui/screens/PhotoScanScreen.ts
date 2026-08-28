@@ -24,6 +24,7 @@ import { computeFoodMacros, kcalFromMacros } from '../../core/calc/food';
 import { guessMealSlot } from '../../core/calc/date';
 import { renderPer100FieldsHtml, renderMealSlotSelectHtml } from '../forms/foodEntryForm';
 import { escapeHtml, fmt1 } from '../util';
+import { fmt } from '../format';
 
 export interface PhotoScanScreenRepos {
   habits: HabitsRepo;
@@ -42,9 +43,6 @@ function uid(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-function fmt(n: number): string {
-  return Math.round(n).toLocaleString('fr-FR');
-}
 
 export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanScreenRepos): void {
   let state: 'idle' | 'analyzing' | 'reviewing' | 'error' = 'idle';

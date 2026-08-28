@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { callMistralChat, extractToolCallArguments, requireMistralApiKey } from './mistralClient';
+import { callMistralChat, extractToolCallArguments, requireMistralApiKey, recordMistralUsage } from './mistralClient';
 
 // Direct client call to api.mistral.ai — replaces the retired n8n webhook relay. Tool
 // schema/prompt below is a verbatim port of n8n_food_vision_workflow.json's "Mistral —
@@ -81,6 +81,7 @@ export async function analyzePlatePhoto(imageBase64: string, mimeType: string): 
     apiKey,
     TIMEOUT_MS,
   );
+  void recordMistralUsage('food_vision', data);
   const result = extractToolCallArguments(data);
   return {
     components: Array.isArray(result.components) ? result.components : [],

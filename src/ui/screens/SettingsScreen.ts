@@ -14,14 +14,43 @@ import { runImport } from '../../migration/importExport';
 import { applyTheme } from '../theme';
 import { renderExportScreen } from './ExportScreen';
 import { renderImportScreen } from './ImportScreen';
+import type { AiFootprintRepo } from '../../storage/repos/aiFootprintRepo';
+import { DEFAULT_AI_FOOTPRINT } from '../../storage/repos/aiFootprintRepo';
+import { calcAiFootprint, type AiFootprintResult } from '../../core/calc/aiFootprint';
+import type { CarbAdviceHistoryRepo } from '../../storage/repos/carbAdviceHistoryRepo';
+import type { CarbPeriodBilanHistoryRepo } from '../../storage/repos/carbPeriodBilanHistoryRepo';
+import { reconstructRetroactiveAiUsage, type RetroactiveUsageResult, type RetroBucketId } from '../../core/calc/aiFootprintRetro';
+import { computeAiFootprintEquivalences } from '../../core/calc/aiFootprintEquivalences';
+import type { AiFeatureId } from '../../core/types';
+import { fmt } from '../format';
+import { fmt1 } from '../util';
 
 export interface SettingsScreenRepos extends ImportRepos {
   profile: ProfileRepo;
   theme: ThemeRepo;
+  aiFootprint: AiFootprintRepo;
+  // Read-only here, purely to reconstruct a best-effort retroactive call count (see
+  // core/calc/aiFootprintRetro.ts) — not part of ImportRepos, these two aren't covered by
+  // export/import at all (pre-existing gap, unrelated to this feature).
+  carbAdviceHistory: CarbAdviceHistoryRepo;
+  carbPeriodBilanHistory: CarbPeriodBilanHistoryRepo;
 }
 
 const MODE_LABEL: Record<ThemeMode, string> = { auto: 'Auto', light: 'Clair', dark: 'Sombre' };
 const NC_MODE_LABEL: Record<NextcloudAutoBackupMode, string> = { off: 'Désactivé', launch: 'Au lancement' };
+const AI_FEATURE_LABEL: Record<AiFeatureId, string> = {
+  food_parse: 'Saisie texte',
+  food_vision: 'Scan assiette',
+  carb_advice: 'Conseil du jour',
+  period_bilan: 'Bilan de période',
+  receipt_scan: 'Scan ticket',
+};
+const RETRO_BUCKET_LABEL: Record<RetroBucketId, string> = {
+  food_parse: 'Saisie texte',
+  scan: 'Scan photo (assiette/ticket)',
+  carb_advice: 'Conseil du jour',
+  period_bilan: 'Bilan de période',
+};
 
 // Fixed swatches instead of a free hue slider. --accent-h drives every color in style.css —
 // background, surfaces, text, borders, day-type/macro colors — so picking one of these reskins
@@ -45,6 +74,26 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
   // Deliberately not reloaded in the post-restore reload block below (see nc-restore-confirm) —
   // the Mistral key is guaranteed unaffected by any import, since it's never in the blob.
   let mistralHasKey = false;
+  // Recomputed from stored token totals on every load — never cached across screen visits, so
+  // the gCO2e/mL figures always reflect today's best-known conversion factor (see
+  // core/calc/aiFootprint.ts for the source/methodology comment).
+  let footprint: AiFootprintResult = calcAiFootprint(DEFAULT_AI_FOOTPRINT);
+  // Best-effort reconstruction of calls made before live tracking existed — see
+  // core/calc/aiFootprintRetro.ts for the methodology and its disclosed undercounts. Also
+  // recomputed on every load, never cached, same as `footprint` above.
+  let retro: RetroactiveUsageResult = { totalCallCount: 0, buckets: [] };
+
+  async function loadAiFootprintAndRetro() {
+    footprint = calcAiFootprint(await repos.aiFootprint.load());
+    retro = reconstructRetroactiveAiUsage({
+      carbAdviceHistory: await repos.carbAdviceHistory.load(),
+      carbPeriodBilanHistory: await repos.carbPeriodBilanHistory.load(),
+      foodLogHistory: await repos.foodLogHistory.load(),
+      foodLogToday: (await repos.foodLog.loadToday()).entries,
+      habits: await repos.habits.load(),
+      footprint,
+    });
+  }
 
   function render() {
     container.innerHTML = `
@@ -136,6 +185,82 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
         <button class="btn-cta" data-action="mistral-save">💾 Enregistrer la clé</button>
         <button class="btn-secondary" data-action="mistral-test">🔌 Tester la connexion</button>
         <div class="msg" id="mistral-msg"></div>
+      </div>
+
+      <div class="card">
+        <h2>🌍 Impact environnemental de l'IA</h2>
+        ${footprint.totalCallCount === 0
+          ? `<p class="empty-hint" style="padding:0">Aucun appel IA effectué pour le moment.</p>`
+          : `
+            <p class="empty-hint" style="padding:0">Depuis le ${footprint.since ? new Date(footprint.since).toLocaleDateString('fr-FR') : '—'} :</p>
+            <div class="counts">
+              ${footprint.perFeature
+                .filter((f) => f.callCount > 0)
+                .map(
+                  (f) =>
+                    `<div><span>${AI_FEATURE_LABEL[f.feature]} (${f.callCount})</span><span>${fmt(f.gCO2e)} gCO2e · ${fmt(f.mlWater)} mL</span></div>`,
+                )
+                .join('')}
+            </div>
+            <div class="counts" style="font-weight:600;margin-top:8px">
+              <div><span>Total</span><span>${fmt(footprint.totalGCO2e)} gCO2e · ${fmt(footprint.totalMlWater)} mL eau</span></div>
+            </div>
+            <p class="empty-hint" style="padding:0;margin-top:8px">
+              Estimation approximative basée sur l'étude d'impact environnemental de Mistral Large 2
+              (Mistral AI, ADEME, Carbone 4, juillet 2025 : ~1,14 gCO2e et 45 mL d'eau pour une
+              réponse de 400 tokens). Ce facteur par token est appliqué uniformément à tous les
+              modèles utilisés par l'app (mistral-small-latest et mistral-large-latest) faute de
+              détail officiel par taille de modèle — l'étude indique seulement que l'impact est
+              globalement proportionnel à la taille du modèle, donc l'empreinte réelle des appels
+              "small" est probablement surestimée ici.
+            </p>
+          `}
+        ${retro.totalCallCount > 0
+          ? `
+            <hr style="border:none;border-top:1px solid var(--outline-variant);margin:14px 0">
+            <p class="empty-hint" style="padding:0">Avant le suivi (estimation rétrospective) :</p>
+            <div class="counts">
+              ${retro.buckets
+                .filter((b) => b.callCount > 0)
+                .map(
+                  (b) =>
+                    `<div><span>${RETRO_BUCKET_LABEL[b.bucket]} (${b.callCount})</span><span>${b.estimateSource === 'fallback' ? '≈ ' : ''}${fmt(b.gCO2e)} gCO2e · ${fmt(b.mlWater)} mL</span></div>`,
+                )
+                .join('')}
+            </div>
+            <p class="empty-hint" style="padding:0;margin-top:8px">
+              Comptage reconstitué à partir de traces indirectes (historique des conseils/bilans,
+              photos scannées confirmées, habitudes créées via IA) — sous-estimé par construction :
+              une tentative jamais sauvegardée, un conseil régénéré plusieurs fois le même jour,
+              ou un ticket enregistré directement en habitudes n'y laissent aucune trace. Le coût
+              en gCO2e/mL de chaque catégorie utilise la moyenne réelle mesurée par cette app pour
+              cette fonctionnalité dès qu'elle existe ; tant qu'aucun appel réel n'a encore été
+              suivi, la marque « ≈ » indique un repli sur la taille de réponse de référence de
+              l'étude Mistral/ADEME/Carbone 4 (400 tokens) plutôt qu'une vraie mesure locale.
+            </p>
+          `
+          : ''}
+        ${(() => {
+          const grandGCO2e = footprint.totalGCO2e + retro.buckets.reduce((s, b) => s + b.gCO2e, 0);
+          const grandMlWater = footprint.totalMlWater + retro.buckets.reduce((s, b) => s + b.mlWater, 0);
+          if (grandGCO2e <= 0 && grandMlWater <= 0) return '';
+          const eq = computeAiFootprintEquivalences(grandGCO2e, grandMlWater);
+          return `
+            <hr style="border:none;border-top:1px solid var(--outline-variant);margin:14px 0">
+            <p class="empty-hint" style="padding:0">Pour se rendre compte (total ci-dessus, sources ADEME/EFSA/INRAE) :</p>
+            <div class="counts">
+              <div><span>📧 Équivalent carbone</span><span>≈ ${fmt(eq.emailsEquivalent)} email(s) sans pièce jointe</span></div>
+              <div><span>💧 Eau, échelle humaine</span><span>≈ ${fmt1(eq.humanDaysWater)} jour(s) de besoin en eau d'un adulte</span></div>
+              <div><span>🐄 Eau, échelle animale</span><span>≈ ${fmt1(eq.cowDailyWaterPercent)} % du besoin quotidien d'une vache laitière</span></div>
+            </div>
+            <p class="empty-hint" style="padding:0;margin-top:8px">
+              Comparaisons sourcées : 1 email sans pièce jointe = 0,11 gCO2e (ADEME, Base
+              Empreinte) ; besoin en eau d'un adulte = 2 à 2,5 L/jour (EFSA) ; besoin en eau d'une
+              vache laitière = 50 à 100 L/jour hors forte chaleur (INRAE) — milieu de fourchette
+              utilisé pour ces deux derniers ratios.
+            </p>
+          `;
+        })()}
       </div>
 
       <div class="card">
@@ -284,6 +409,7 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
       applyTheme(theme);
       nextcloud = await repos.nextcloud.load();
       ncHasPassword = !!(await getNextcloudPassword());
+      await loadAiFootprintAndRetro();
       render();
       ncMsgEl().className = 'msg ok';
       ncMsgEl().textContent = '✓ Restauration terminée';
@@ -362,6 +488,7 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
     nextcloud = await repos.nextcloud.load();
     ncHasPassword = !!(await getNextcloudPassword());
     mistralHasKey = !!(await getMistralApiKey());
+    await loadAiFootprintAndRetro();
     render();
   })();
 }

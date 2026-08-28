@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { SecureStorage } from '@aparajita/capacitor-secure-storage';
+import { PreferencesStorageAdapter } from '../storage/PreferencesStorageAdapter';
+import { AiFootprintRepo } from '../storage/repos/aiFootprintRepo';
+import type { AiFeatureId } from '../core/types';
 
 // Same pattern as getNextcloudPassword/setNextcloudPassword (nextcloudWebdav.ts) — Android
 // Keystore via SecureStorage, never @capacitor/preferences. Unlike the Nextcloud app password,
@@ -86,6 +89,26 @@ export function extractJsonModeContent(data: any): any {
     return JSON.parse(content);
   } catch {
     throw new Error('réponse IA invalide (JSON illisible)');
+  }
+}
+
+// Self-contained, same style as this module's private ownership of the API key storage —
+// no repo threaded through the 5 feature functions' signatures for this side-channel.
+const footprintRepo = new AiFootprintRepo(new PreferencesStorageAdapter());
+
+// Best-effort usage tracking, called (not awaited) by each of the 5 feature files right after
+// their own callMistralChat resolves — never by testMistralConnection, whose max_tokens:1 ping
+// isn't meaningful app usage. Must never throw or affect the calling feature's success/failure
+// path (see core/calc/aiFootprint.ts for what this feeds — the Settings "Impact IA" card).
+export async function recordMistralUsage(feature: AiFeatureId, data: any): Promise<void> {
+  try {
+    const usage = data?.usage;
+    const promptTokens = Number(usage?.prompt_tokens) || 0;
+    const completionTokens = Number(usage?.completion_tokens) || 0;
+    if (promptTokens === 0 && completionTokens === 0) return;
+    await footprintRepo.recordUsage(feature, promptTokens, completionTokens);
+  } catch {
+    // Silent — see comment above.
   }
 }
 

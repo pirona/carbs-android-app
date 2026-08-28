@@ -58,6 +58,7 @@ import {
 import { attachMealSlotDrag } from '../mealSlotDrag';
 import { iconDragHandle, iconAdd } from '../icons';
 import { escapeHtml, fmt1 } from '../util';
+import { fmt } from '../format';
 
 export interface ConseilsScreenRepos {
   dayHistory: DayHistoryRepo;
@@ -74,9 +75,6 @@ interface AdviceDay {
   entries: LogEntry[];
 }
 
-function fmt(n: number): string {
-  return Math.round(n).toLocaleString('fr-FR');
-}
 
 // day_history and food_log_history are both kept newest-first (prepended on archive) — walk
 // forward and take the first day that has both a complete DayEntry AND at least one logged

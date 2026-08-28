@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { callMistralChat, extractToolCallArguments, requireMistralApiKey } from './mistralClient';
+import { callMistralChat, extractToolCallArguments, requireMistralApiKey, recordMistralUsage } from './mistralClient';
 
 // Direct client call to api.mistral.ai — a receipt photo (ticket de caisse) can list many
 // food items at once, unlike a single-plate photo. Deliberately does NOT ask Mistral for
@@ -78,6 +78,7 @@ export async function analyzeReceiptPhoto(imageBase64: string, mimeType: string)
     apiKey,
     TIMEOUT_MS,
   );
+  void recordMistralUsage('receipt_scan', data);
   const result = extractToolCallArguments(data);
   return {
     items: Array.isArray(result.items) ? result.items : [],

@@ -11,6 +11,7 @@ import { FoodLogHistoryRepo } from './storage/repos/foodLogHistoryRepo';
 import { CarbAdviceHistoryRepo } from './storage/repos/carbAdviceHistoryRepo';
 import { CarbPeriodBilanHistoryRepo } from './storage/repos/carbPeriodBilanHistoryRepo';
 import { ProfileRepo } from './storage/repos/profileRepo';
+import { AiFootprintRepo } from './storage/repos/aiFootprintRepo';
 import { renderDayScreen, type DayScreenRepos } from './ui/screens/DayScreen';
 import { renderProgressScreen, type ProgressScreenRepos } from './ui/screens/ProgressScreen';
 import { renderWeekScreen, type WeekScreenRepos } from './ui/screens/WeekScreen';
@@ -39,6 +40,7 @@ const foodLogHistory = new FoodLogHistoryRepo(storage);
 const carbAdviceHistory = new CarbAdviceHistoryRepo(storage);
 const carbPeriodBilanHistory = new CarbPeriodBilanHistoryRepo(storage);
 const profile = new ProfileRepo(storage);
+const aiFootprint = new AiFootprintRepo(storage);
 const theme = new ThemeRepo(storage);
 const nextcloud = new NextcloudRepo(storage);
 
@@ -64,7 +66,21 @@ nextcloud.load().then(async (settings) => {
 const dayRepos: DayScreenRepos = { dayHistory, sport, foodLog, foodLogHistory, plaisir, habits, profile };
 const progressRepos: ProgressScreenRepos = { dayHistory, carbHistory, plaisir, sport, profile };
 const weekRepos: WeekScreenRepos = { dayHistory, plaisir, sport, profile };
-const settingsRepos: SettingsScreenRepos = { dayHistory, carbHistory, plaisir, sport, habits, foodLog, foodLogHistory, profile, theme, nextcloud };
+const settingsRepos: SettingsScreenRepos = {
+  dayHistory,
+  carbHistory,
+  plaisir,
+  sport,
+  habits,
+  foodLog,
+  foodLogHistory,
+  profile,
+  theme,
+  nextcloud,
+  aiFootprint,
+  carbAdviceHistory,
+  carbPeriodBilanHistory,
+};
 const photoScanRepos: PhotoScanScreenRepos = { habits, foodLog };
 const conseilsRepos: ConseilsScreenRepos = { dayHistory, foodLogHistory, carbAdviceHistory, carbPeriodBilanHistory, profile };
 

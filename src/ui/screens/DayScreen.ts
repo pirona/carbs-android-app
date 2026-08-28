@@ -28,6 +28,7 @@ import {
 import { guessMealSlot } from '../../core/calc/date';
 import type { MealSlot } from '../../core/types';
 import { escapeHtml, fmt1, attachLongPress } from '../util';
+import { fmt } from '../format';
 import { attachMealSlotDrag } from '../mealSlotDrag';
 import { iconAdd, iconRestaurant, iconDragHandle, iconSearch } from '../icons';
 
@@ -53,9 +54,6 @@ interface LogFormState {
 const DAYTYPE_LABEL: Record<DayType, string> = { high: 'HIGH CARB', medium: 'MEDIUM CARB', low: 'LOW CARB', plaisir: 'JOUR PLAISIR' };
 const DAYTYPE_COLOR: Record<DayType, string> = { high: 'var(--high)', medium: 'var(--medium)', low: 'var(--low)', plaisir: 'var(--plaisir)' };
 
-function fmt(n: number): string {
-  return Math.round(n).toLocaleString('fr-FR');
-}
 
 export function renderDayScreen(container: HTMLElement, repos: DayScreenRepos, health: HealthConnectAdapter): void {
   let profile: Profile;

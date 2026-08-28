@@ -12,6 +12,7 @@ import { FoodLogHistoryRepo } from '../../storage/repos/foodLogHistoryRepo';
 import { ProfileRepo } from '../../storage/repos/profileRepo';
 import { ThemeRepo } from '../../storage/repos/themeRepo';
 import { NextcloudRepo } from '../../storage/repos/nextcloudRepo';
+import { AiFootprintRepo, DEFAULT_AI_FOOTPRINT } from '../../storage/repos/aiFootprintRepo';
 import { getISOWeek } from '../../core/calc/date';
 import type { DayEntry } from '../../core/types';
 
@@ -28,6 +29,7 @@ function makeRepos(): ImportRepos {
     profile: new ProfileRepo(storage),
     theme: new ThemeRepo(storage),
     nextcloud: new NextcloudRepo(storage),
+    aiFootprint: new AiFootprintRepo(storage),
   };
 }
 
@@ -231,5 +233,65 @@ describe('runImport', () => {
     expect(result.ok).toBe(true);
     expect(await repos.profile.load()).toEqual({ height_cm: 180, age: 30, sex: 'male', weight_default_kg: 80, weight_start_kg: 85, weight_goal_kg: 75 });
     expect(await repos.theme.load()).toEqual({ mode: 'dark', accentHue: 200 });
+  });
+
+  it('ai_footprint: sums per-feature counters with existing data instead of overwriting', async () => {
+    const repos = makeRepos();
+    await repos.aiFootprint.recordUsage('food_parse', 300, 100);
+    const blob = JSON.stringify({
+      ai_footprint: {
+        since: '2026-01-01T00:00:00.000Z',
+        perFeature: { food_parse: { promptTokens: 50, completionTokens: 20, callCount: 1 } },
+      },
+    });
+    const result = await runImport(repos, blob, true, NOW);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const ai = result.perKey.find((k) => k.key === 'ai_footprint');
+      expect(ai?.recognized).toBe(true);
+    }
+    const data = await repos.aiFootprint.load();
+    expect(data.perFeature.food_parse).toEqual({ promptTokens: 350, completionTokens: 120, callCount: 2 });
+  });
+
+  it('ai_footprint: keeps the earlier of the two `since` dates', async () => {
+    const repos = makeRepos();
+    await repos.aiFootprint.recordUsage('food_parse', 10, 5); // sets `since` to "now" (NOW-independent, uses real Date)
+    const existingBefore = await repos.aiFootprint.load();
+    const earlierBlob = JSON.stringify({
+      ai_footprint: { since: '2020-01-01T00:00:00.000Z', perFeature: {} },
+    });
+    await runImport(repos, earlierBlob, true, NOW);
+    const afterEarlier = await repos.aiFootprint.load();
+    expect(afterEarlier.since).toBe('2020-01-01T00:00:00.000Z');
+    expect(afterEarlier.since < existingBefore.since).toBe(true);
+
+    const laterBlob = JSON.stringify({
+      ai_footprint: { since: '2099-01-01T00:00:00.000Z', perFeature: {} },
+    });
+    await runImport(repos, laterBlob, true, NOW);
+    const afterLater = await repos.aiFootprint.load();
+    expect(afterLater.since).toBe('2020-01-01T00:00:00.000Z');
+  });
+
+  it('ai_footprint: leaves existing counters untouched and reports unrecognized when absent', async () => {
+    const repos = makeRepos();
+    await repos.aiFootprint.recordUsage('carb_advice', 500, 200);
+    const result = await runImport(repos, JSON.stringify({}), true, NOW);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const ai = result.perKey.find((k) => k.key === 'ai_footprint');
+      expect(ai?.recognized).toBe(false);
+    }
+    expect((await repos.aiFootprint.load()).perFeature.carb_advice).toEqual({ promptTokens: 500, completionTokens: 200, callCount: 1 });
+  });
+
+  it('ai_footprint: preview (apply=false) never writes to storage', async () => {
+    const repos = makeRepos();
+    const blob = JSON.stringify({
+      ai_footprint: { since: '2026-01-01T00:00:00.000Z', perFeature: { food_parse: { promptTokens: 999, completionTokens: 999, callCount: 9 } } },
+    });
+    await runImport(repos, blob, false, NOW);
+    expect(await repos.aiFootprint.load()).toEqual(DEFAULT_AI_FOOTPRINT);
   });
 });

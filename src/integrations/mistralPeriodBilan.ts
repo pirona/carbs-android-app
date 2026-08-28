@@ -5,7 +5,7 @@
 // (calcPeriodStats), never asks the model to recompute or invent a figure.
 import type { DayType } from '../core/types';
 import type { PeriodCompleteness } from '../core/calc/periodBilan';
-import { callMistralChat, extractJsonModeContent, requireMistralApiKey } from './mistralClient';
+import { callMistralChat, extractJsonModeContent, requireMistralApiKey, recordMistralUsage } from './mistralClient';
 
 export interface PeriodBilanStats {
   total_days: number;
@@ -77,6 +77,7 @@ export async function fetchPeriodBilan(payload: PeriodBilanRequest): Promise<Per
     apiKey,
     TIMEOUT_MS,
   );
+  void recordMistralUsage('period_bilan', data);
   const parsed = extractJsonModeContent(data);
   if (typeof parsed.bilan !== 'string' || !parsed.bilan.trim()) {
     throw new Error('Réponse IA vide — réessaie.');

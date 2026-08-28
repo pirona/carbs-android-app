@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import type { DayType, MealSlot } from '../core/types';
 import type { AdviceCompleteness } from '../core/calc/adviceCompleteness';
-import { callMistralChat, extractJsonModeContent, requireMistralApiKey } from './mistralClient';
+import { callMistralChat, extractJsonModeContent, requireMistralApiKey, recordMistralUsage } from './mistralClient';
 
 // Direct client call to api.mistral.ai — replaces the retired n8n webhook relay. System
 // prompt below is a verbatim port of n8n_carb_advice_workflow.json's "Build Prompt" node
@@ -88,6 +88,7 @@ export async function fetchCarbAdvice(payload: CarbAdviceRequest): Promise<CarbA
     apiKey,
     TIMEOUT_MS,
   );
+  void recordMistralUsage('carb_advice', data);
   const parsed = extractJsonModeContent(data);
   if (typeof parsed.advice !== 'string' || !parsed.advice.trim()) {
     throw new Error('Réponse IA vide — réessaie.');

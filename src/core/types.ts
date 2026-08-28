@@ -151,6 +151,21 @@ export interface LogEntry {
   photo_group_id?: string | null;
 }
 
+// AI usage/footprint tracking — cumulative counters only (no per-call log), one set per
+// Mistral feature, recomputed into gCO2e/mL live at display time (see core/calc/aiFootprint.ts).
+export type AiFeatureId = 'food_parse' | 'food_vision' | 'carb_advice' | 'period_bilan' | 'receipt_scan';
+
+export interface AiFeatureUsage {
+  promptTokens: number;
+  completionTokens: number;
+  callCount: number;
+}
+
+export interface AiFootprintData {
+  since: string; // ISO date-time, set once on the first-ever recorded call, never overwritten after
+  perFeature: Record<AiFeatureId, AiFeatureUsage>;
+}
+
 export interface MacroResult {
   dayType: DayType;
   kcal: number | null;

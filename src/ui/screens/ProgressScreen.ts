@@ -13,6 +13,7 @@ import { detectDayType } from '../../core/calc/dayType';
 import { calcMacros } from '../../core/calc/macros';
 import { calcWeeklyDeficit, calcWeekRealDeficit } from '../../core/calc/deficit';
 import { calcProgramFidelity } from '../../core/calc/fidelity';
+import { fmt } from '../format';
 import { calcWeightGoalProgress } from '../../core/calc/weightGoal';
 import { formatDateKey } from '../../core/calc/date';
 
@@ -26,9 +27,6 @@ export interface ProgressScreenRepos {
   profile: ProfileRepo;
 }
 
-function fmt(n: number): string {
-  return Math.round(n).toLocaleString('fr-FR');
-}
 
 export function renderProgressScreen(container: HTMLElement, repos: ProgressScreenRepos): void {
   let profile: Profile;

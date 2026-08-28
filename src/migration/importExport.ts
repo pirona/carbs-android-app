@@ -3,7 +3,7 @@
 // app's current storage (see importMerge.ts for the merge policy), and either previews
 // the result (apply:false) or commits it (apply:true) — same code path for both so the
 // preview can never lie about what a commit would actually do.
-import type { DayEntry, Habit, LogEntry, Profile, WeekEntry } from '../core/types';
+import type { AiFeatureId, AiFootprintData, DayEntry, Habit, LogEntry, Profile, WeekEntry } from '../core/types';
 import { DayHistoryRepo } from '../storage/repos/dayHistoryRepo';
 import { CarbHistoryRepo } from '../storage/repos/carbHistoryRepo';
 import { PlaisirRepo } from '../storage/repos/plaisirRepo';
@@ -14,6 +14,7 @@ import { FoodLogHistoryRepo, type FoodLogHistoryEntry } from '../storage/repos/f
 import { ProfileRepo } from '../storage/repos/profileRepo';
 import { ThemeRepo, type ThemeSettings } from '../storage/repos/themeRepo';
 import { NextcloudRepo, type NextcloudSettings } from '../storage/repos/nextcloudRepo';
+import { AiFootprintRepo } from '../storage/repos/aiFootprintRepo';
 import { setNextcloudPassword } from '../integrations/nextcloudWebdav';
 import { formatDateKey } from '../core/calc/date';
 import { mergeByKey, mergeByUpdatedAt, mergeRecord } from './importMerge';
@@ -30,6 +31,7 @@ export interface ImportRepos {
   profile: ProfileRepo;
   theme: ThemeRepo;
   nextcloud: NextcloudRepo;
+  aiFootprint: AiFootprintRepo;
 }
 
 export interface ImportKeyResult {
@@ -213,6 +215,45 @@ export async function runImport(
     perKey.push({ key: 'nextcloud_settings', recognized: true, note: 'adopté' });
   } else {
     perKey.push({ key: 'nextcloud_settings', recognized: false, note: 'absent' });
+  }
+
+  // ai_footprint — cumulative usage counters, not a preference: unlike profile/theme_settings
+  // ("always adopt"), a naive overwrite could regress the running totals downward if an older
+  // backup is re-imported. Summed per feature instead (existing + incoming), `since` keeps the
+  // EARLIER of the two non-empty dates (the true start of tracking). Not a secret — same
+  // low-stakes category as profile/theme — already included in export automatically via
+  // exportDump.ts's generic storage.keys() dump.
+  if (parsed.ai_footprint && typeof parsed.ai_footprint === 'object' && !isArray(parsed.ai_footprint)) {
+    const incoming = parsed.ai_footprint as Partial<AiFootprintData>;
+    const existing = await repos.aiFootprint.load();
+    const features = Object.keys(existing.perFeature) as AiFeatureId[];
+    const merged: AiFootprintData = {
+      since: !existing.since
+        ? incoming.since || ''
+        : !incoming.since
+          ? existing.since
+          : existing.since < incoming.since
+            ? existing.since
+            : incoming.since,
+      perFeature: Object.fromEntries(
+        features.map((f) => {
+          const a = existing.perFeature[f] || { promptTokens: 0, completionTokens: 0, callCount: 0 };
+          const b = incoming.perFeature?.[f] || { promptTokens: 0, completionTokens: 0, callCount: 0 };
+          return [
+            f,
+            {
+              promptTokens: a.promptTokens + b.promptTokens,
+              completionTokens: a.completionTokens + b.completionTokens,
+              callCount: a.callCount + b.callCount,
+            },
+          ];
+        }),
+      ) as AiFootprintData['perFeature'],
+    };
+    if (apply) await repos.aiFootprint.save(merged);
+    perKey.push({ key: 'ai_footprint', recognized: true, note: 'cumulé avec les données existantes' });
+  } else {
+    perKey.push({ key: 'ai_footprint', recognized: false, note: 'absent' });
   }
 
   // nextcloud_app_password — lives in secure storage, not Preferences, but travels in the
