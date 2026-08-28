@@ -19,6 +19,7 @@ import { setNextcloudPassword } from '../integrations/nextcloudWebdav';
 import { formatDateKey } from '../core/calc/date';
 import { mergeByKey, mergeByUpdatedAt, mergeRecord } from './importMerge';
 import type { PlaisirOverrides } from '../core/types';
+import { t } from '../ui/i18n/strings';
 
 export interface ImportRepos {
   dayHistory: DayHistoryRepo;
@@ -66,10 +67,10 @@ export async function runImport(
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return { ok: false, error: "JSON invalide — vérifie que le blob a été copié en entier." };
+    return { ok: false, error: t('import.err.invalidJson') };
   }
   if (!parsed || typeof parsed !== 'object') {
-    return { ok: false, error: 'Format inattendu : ce n\'est pas un objet JSON.' };
+    return { ok: false, error: t('import.err.unexpectedFormat') };
   }
 
   const perKey: ImportKeyResult[] = [];
@@ -81,9 +82,9 @@ export async function runImport(
     const { merged, added, skipped } = mergeByKey(existing, incoming, (e) => e.date);
     merged.sort((a, b) => (a.date < b.date ? 1 : -1));
     if (apply) await repos.dayHistory.saveHistory(merged);
-    perKey.push({ key: 'day_history', recognized: true, note: `${added} nouvelle(s), ${skipped} déjà connue(s)` });
+    perKey.push({ key: 'day_history', recognized: true, note: t('import.note.addedKnown', { added, skipped }) });
   } else {
-    perKey.push({ key: 'day_history', recognized: false, note: 'absent ou format inattendu' });
+    perKey.push({ key: 'day_history', recognized: false, note: t('import.note.absentOrBadFormat') });
   }
 
   // current_day — only adopted if nothing is currently live.
@@ -91,12 +92,12 @@ export async function runImport(
     const existing = await repos.dayHistory.loadCurrentDay();
     if (!existing) {
       if (apply) await repos.dayHistory.saveCurrentDay(parsed.current_day as DayEntry);
-      perKey.push({ key: 'current_day', recognized: true, note: 'adopté (aucune journée en cours)' });
+      perKey.push({ key: 'current_day', recognized: true, note: t('import.note.currentDayAdopted') });
     } else {
-      perKey.push({ key: 'current_day', recognized: true, note: 'ignoré — une journée en cours existe déjà' });
+      perKey.push({ key: 'current_day', recognized: true, note: t('import.note.currentDaySkipped') });
     }
   } else {
-    perKey.push({ key: 'current_day', recognized: false, note: 'absent' });
+    perKey.push({ key: 'current_day', recognized: false, note: t('import.note.absent') });
   }
 
   // carb_history — union by (year, week), existing wins, sorted newest-first.
@@ -106,22 +107,22 @@ export async function runImport(
     const { merged, added, skipped } = mergeByKey(existing, incoming, (e) => `${e.year}-${e.week}`);
     merged.sort((a, b) => (a.year !== b.year ? b.year - a.year : b.week - a.week));
     if (apply) await repos.carbHistory.save(merged);
-    perKey.push({ key: 'carb_history', recognized: true, note: `${added} nouvelle(s), ${skipped} déjà connue(s)` });
+    perKey.push({ key: 'carb_history', recognized: true, note: t('import.note.addedKnown', { added, skipped }) });
   } else {
-    perKey.push({ key: 'carb_history', recognized: false, note: 'absent ou format inattendu' });
+    perKey.push({ key: 'carb_history', recognized: false, note: t('import.note.absentOrBadFormat') });
   }
 
   // sport_kcal — ephemeral daily value, deliberately not migrated.
-  perKey.push({ key: 'sport_kcal', recognized: 'sport_kcal' in parsed, note: 'non importé — valeur journalière éphémère' });
+  perKey.push({ key: 'sport_kcal', recognized: 'sport_kcal' in parsed, note: t('import.note.sportKcalNotImported') });
 
   // sport_plan — union of {date: kcal}, existing wins.
   if (parsed.sport_plan && typeof parsed.sport_plan === 'object' && !isArray(parsed.sport_plan)) {
     const existing = await repos.sport.loadSportPlan();
     const { merged, added, skipped } = mergeRecord(existing, parsed.sport_plan as Record<string, number>);
     if (apply) await repos.sport.saveSportPlan(merged, now);
-    perKey.push({ key: 'sport_plan', recognized: true, note: `${added} jour(s) ajouté(s), ${skipped} déjà connu(s)` });
+    perKey.push({ key: 'sport_plan', recognized: true, note: t('import.note.daysAdded', { added, skipped }) });
   } else {
-    perKey.push({ key: 'sport_plan', recognized: false, note: 'absent ou format inattendu' });
+    perKey.push({ key: 'sport_plan', recognized: false, note: t('import.note.absentOrBadFormat') });
   }
 
   // plaisir_overrides — only adopted if it's for the current ISO week and nothing is set yet.
@@ -132,17 +133,17 @@ export async function runImport(
     const isEmpty = Object.keys(existing.levels || {}).length === 0;
     if (isCurrentWeek && isEmpty && Object.keys(incoming.levels || {}).length > 0) {
       if (apply) await repos.plaisir.saveOverrides(incoming, now);
-      perKey.push({ key: 'plaisir_overrides', recognized: true, note: 'adopté (semaine en cours, rien de saisi encore)' });
+      perKey.push({ key: 'plaisir_overrides', recognized: true, note: t('import.note.plaisirAdopted') });
     } else {
-      perKey.push({ key: 'plaisir_overrides', recognized: true, note: "ignoré — semaine différente ou déjà saisi" });
+      perKey.push({ key: 'plaisir_overrides', recognized: true, note: t('import.note.plaisirSkipped') });
     }
   } else {
-    perKey.push({ key: 'plaisir_overrides', recognized: false, note: 'absent ou format inattendu' });
+    perKey.push({ key: 'plaisir_overrides', recognized: false, note: t('import.note.absentOrBadFormat') });
   }
 
   // plaisir_week — derived automatically from plaisir_overrides (PlaisirRepo.saveOverrides
   // keeps it in sync), never written directly here to avoid two sources of truth.
-  perKey.push({ key: 'plaisir_week', recognized: 'plaisir_week' in parsed, note: 'dérivé automatiquement de plaisir_overrides, pas importé séparément' });
+  perKey.push({ key: 'plaisir_week', recognized: 'plaisir_week' in parsed, note: t('import.note.plaisirWeekDerived') });
 
   // food_habits — most-recent updated_at wins, same rule as the old n8n sync.
   if (isArray(parsed.food_habits)) {
@@ -150,9 +151,9 @@ export async function runImport(
     const incoming = parsed.food_habits as Habit[];
     const { merged, added, skipped } = mergeByUpdatedAt(existing, incoming, (h) => h.id);
     if (apply) await repos.habits.save(merged);
-    perKey.push({ key: 'food_habits', recognized: true, note: `${added} ajoutée(s)/mise(s) à jour, ${skipped} déjà à jour` });
+    perKey.push({ key: 'food_habits', recognized: true, note: t('import.note.habitsUpdated', { added, skipped }) });
   } else {
-    perKey.push({ key: 'food_habits', recognized: false, note: 'absent ou format inattendu' });
+    perKey.push({ key: 'food_habits', recognized: false, note: t('import.note.absentOrBadFormat') });
   }
 
   // food_log_today — only meaningful if the imported log is actually for today.
@@ -163,12 +164,12 @@ export async function runImport(
       const existing = await repos.foodLog.loadToday(now);
       const { merged, added, skipped } = mergeByUpdatedAt(existing.entries, incoming.entries as LogEntry[], (e) => e.entry_id);
       if (apply) await repos.foodLog.saveToday({ date: todayKey, entries: merged });
-      perKey.push({ key: 'food_log_today', recognized: true, note: `${added} ajoutée(s), ${skipped} déjà connue(s)` });
+      perKey.push({ key: 'food_log_today', recognized: true, note: t('import.note.entriesAdded', { added, skipped }) });
     } else {
-      perKey.push({ key: 'food_log_today', recognized: true, note: "ignoré — journal d'un autre jour" });
+      perKey.push({ key: 'food_log_today', recognized: true, note: t('import.note.foodLogTodaySkipped') });
     }
   } else {
-    perKey.push({ key: 'food_log_today', recognized: false, note: 'absent ou format inattendu' });
+    perKey.push({ key: 'food_log_today', recognized: false, note: t('import.note.absentOrBadFormat') });
   }
 
   // food_log_history — same policy as day_history: union by date, existing wins, historical
@@ -179,42 +180,42 @@ export async function runImport(
     const { merged, added, skipped } = mergeByKey(existing, incoming, (e) => e.date);
     merged.sort((a, b) => (a.date < b.date ? 1 : -1));
     if (apply) await repos.foodLogHistory.save(merged);
-    perKey.push({ key: 'food_log_history', recognized: true, note: `${added} jour(s) ajouté(s), ${skipped} déjà connu(s)` });
+    perKey.push({ key: 'food_log_history', recognized: true, note: t('import.note.daysAdded', { added, skipped }) });
   } else {
-    perKey.push({ key: 'food_log_history', recognized: false, note: 'absent ou format inattendu' });
+    perKey.push({ key: 'food_log_history', recognized: false, note: t('import.note.absentOrBadFormat') });
   }
 
   // food_habits_sort_mode — a UI preference, low-stakes, always adopted when present.
   if (parsed.food_habits_sort_mode === 'alpha' || parsed.food_habits_sort_mode === 'recent') {
     if (apply) await repos.habits.saveSortMode(parsed.food_habits_sort_mode as HabitSortMode);
-    perKey.push({ key: 'food_habits_sort_mode', recognized: true, note: 'adopté' });
+    perKey.push({ key: 'food_habits_sort_mode', recognized: true, note: t('import.note.adopted') });
   } else {
-    perKey.push({ key: 'food_habits_sort_mode', recognized: false, note: 'absent' });
+    perKey.push({ key: 'food_habits_sort_mode', recognized: false, note: t('import.note.absent') });
   }
 
   // profile — a single preference blob, low-stakes, always adopted when present (same
   // policy as food_habits_sort_mode below).
   if (parsed.profile && typeof parsed.profile === 'object' && !isArray(parsed.profile)) {
     if (apply) await repos.profile.save(parsed.profile as Profile);
-    perKey.push({ key: 'profile', recognized: true, note: 'adopté' });
+    perKey.push({ key: 'profile', recognized: true, note: t('import.note.adopted') });
   } else {
-    perKey.push({ key: 'profile', recognized: false, note: 'absent' });
+    perKey.push({ key: 'profile', recognized: false, note: t('import.note.absent') });
   }
 
   // theme_settings — same policy: single preference blob, always adopted when present.
   if (parsed.theme_settings && typeof parsed.theme_settings === 'object' && !isArray(parsed.theme_settings)) {
     if (apply) await repos.theme.save(parsed.theme_settings as ThemeSettings);
-    perKey.push({ key: 'theme_settings', recognized: true, note: 'adopté' });
+    perKey.push({ key: 'theme_settings', recognized: true, note: t('import.note.adopted') });
   } else {
-    perKey.push({ key: 'theme_settings', recognized: false, note: 'absent' });
+    perKey.push({ key: 'theme_settings', recognized: false, note: t('import.note.absent') });
   }
 
   // nextcloud_settings — same policy: single preference blob, always adopted when present.
   if (parsed.nextcloud_settings && typeof parsed.nextcloud_settings === 'object' && !isArray(parsed.nextcloud_settings)) {
     if (apply) await repos.nextcloud.save(parsed.nextcloud_settings as NextcloudSettings);
-    perKey.push({ key: 'nextcloud_settings', recognized: true, note: 'adopté' });
+    perKey.push({ key: 'nextcloud_settings', recognized: true, note: t('import.note.adopted') });
   } else {
-    perKey.push({ key: 'nextcloud_settings', recognized: false, note: 'absent' });
+    perKey.push({ key: 'nextcloud_settings', recognized: false, note: t('import.note.absent') });
   }
 
   // ai_footprint — cumulative usage counters, not a preference: unlike profile/theme_settings
@@ -251,18 +252,18 @@ export async function runImport(
       ) as AiFootprintData['perFeature'],
     };
     if (apply) await repos.aiFootprint.save(merged);
-    perKey.push({ key: 'ai_footprint', recognized: true, note: 'cumulé avec les données existantes' });
+    perKey.push({ key: 'ai_footprint', recognized: true, note: t('import.note.aiFootprintMerged') });
   } else {
-    perKey.push({ key: 'ai_footprint', recognized: false, note: 'absent' });
+    perKey.push({ key: 'ai_footprint', recognized: false, note: t('import.note.absent') });
   }
 
   // nextcloud_app_password — lives in secure storage, not Preferences, but travels in the
   // same export/import blob at the user's explicit request (see ExportScreen's warning).
   if (typeof parsed.nextcloud_app_password === 'string' && parsed.nextcloud_app_password) {
     if (apply) await setNextcloudPassword(parsed.nextcloud_app_password);
-    perKey.push({ key: 'nextcloud_app_password', recognized: true, note: 'adopté' });
+    perKey.push({ key: 'nextcloud_app_password', recognized: true, note: t('import.note.adopted') });
   } else {
-    perKey.push({ key: 'nextcloud_app_password', recognized: false, note: 'absent' });
+    perKey.push({ key: 'nextcloud_app_password', recognized: false, note: t('import.note.absent') });
   }
 
   return { ok: true, perKey };

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import type { StorageAdapter } from '../storage/StorageAdapter';
 import { getNextcloudPassword } from '../integrations/nextcloudWebdav';
+import { t } from '../ui/i18n/strings';
 
 export interface ExportEntry {
   key: string;
@@ -10,15 +11,15 @@ export interface ExportEntry {
 
 function describe(key: string, value: unknown): string {
   if (value == null) return '—';
-  if (Array.isArray(value)) return `${value.length} entrée(s)`;
+  if (Array.isArray(value)) return t('export.describe.entries', { n: value.length });
   if (typeof value === 'object') {
     const v = value as Record<string, unknown>;
-    if (key === 'food_log_today' && Array.isArray(v.entries)) return `${v.entries.length} entrée(s) (aujourd'hui)`;
+    if (key === 'food_log_today' && Array.isArray(v.entries)) return t('export.describe.entriesToday', { n: v.entries.length });
     if (key === 'plaisir_overrides' && v.levels && typeof v.levels === 'object') {
-      return `${Object.keys(v.levels as object).length} jour(s) (semaine en cours)`;
+      return t('export.describe.daysThisWeek', { n: Object.keys(v.levels as object).length });
     }
-    if (key === 'sport_plan') return `${Object.keys(v).length} jour(s) planifiés`;
-    return 'présent';
+    if (key === 'sport_plan') return t('export.describe.daysPlanned', { n: Object.keys(v).length });
+    return t('export.describe.present');
   }
   return String(value);
 }

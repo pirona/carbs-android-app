@@ -5,6 +5,7 @@
 import type { PluginListenerHandle } from '@capacitor/core';
 import { BarcodeScanner, BarcodeFormat, GoogleBarcodeScannerModuleInstallState } from '@capacitor-mlkit/barcode-scanning';
 import { getOFFByBarcode, type OffProduct } from './openFoodFacts';
+import { t } from '../ui/i18n/strings';
 
 // Grocery products only ever carry EAN-13/EAN-8/UPC-A/UPC-E — restricting formats is the one
 // tuning knob ML Kit's ready-to-use scanner UI exposes (per its own docs: "Improve the speed
@@ -37,7 +38,7 @@ async function ensureModuleInstalled(): Promise<void> {
         resolve();
       } else if (event.state === GoogleBarcodeScannerModuleInstallState.FAILED || event.state === GoogleBarcodeScannerModuleInstallState.CANCELED) {
         handle?.remove();
-        reject(new Error('Installation du module de scan impossible.'));
+        reject(new Error(t('barcode.err.moduleInstall')));
       }
     }).then((h) => {
       handle = h;
@@ -59,7 +60,7 @@ export async function scanBarcode(): Promise<BarcodeScanResult> {
   } catch (e) {
     const message = (e as Error).message ?? '';
     if (message.includes('scan canceled')) return { status: 'cancelled' };
-    return { status: 'error', message: message || 'Scan impossible.' };
+    return { status: 'error', message: message || t('barcode.err.scanFailed') };
   }
 }
 
@@ -71,6 +72,6 @@ export async function lookupOFF(code: string): Promise<OFFLookupResult> {
     if (!product) return { status: 'not-found' };
     return { status: 'ok', product };
   } catch {
-    return { status: 'error', message: 'Recherche impossible — vérifier la connexion.' };
+    return { status: 'error', message: t('barcode.err.lookupFailed') };
   }
 }

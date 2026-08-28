@@ -167,6 +167,69 @@ export const STRINGS = {
   // --- src/ui/screens/SettingsScreen.ts: language card only (rest of the screen stays French
   // for now, see plan §MVP — deliberately not fully migrated this pass) ---
   'settings.language.title': { fr: '🌐 Langue', en: '🌐 Language' },
+
+  // --- src/ui/screens/ExportScreen.ts ---
+  'export.hint': { fr: "Sauvegarde manuelle de toutes les données de l'app en JSON — à partager/enregistrer où tu veux (fichier, email...). Pas de sauvegarde automatique.", en: 'Manual backup of all app data as JSON — share/save it wherever you want (file, email...). No automatic backup.' },
+  'export.secretWarning': { fr: "⚠️ Ce blob contient ton app password Nextcloud <strong>en clair</strong> (pour permettre une restauration complète en un coup) — évite de le coller dans un canal non sécurisé.", en: '⚠️ This blob contains your Nextcloud app password <strong>in plain text</strong> (to allow a one-shot full restore) — avoid pasting it into an unsecured channel.' },
+  'export.reading': { fr: 'Lecture…', en: 'Reading…' },
+  'export.share': { fr: '📤 Partager', en: '📤 Share' },
+  'export.copy': { fr: '📋 Copier', en: '📋 Copy' },
+  'export.nothingToExport': { fr: "Rien à exporter pour le moment.", en: 'Nothing to export yet.' },
+  'export.shareTitle': { fr: 'Export Carbs', en: 'Carbs export' },
+  'export.copied': { fr: '✓ Copié', en: '✓ Copied' },
+  'export.copyFailed': { fr: 'Échec de la copie', en: 'Copy failed' },
+
+  // --- src/ui/screens/ImportScreen.ts ---
+  'import.hint': { fr: "Colle ici le JSON copié depuis <code>export.html</code> (les anciennes pages HA). Rien n'est écrit avant que tu confirmes l'aperçu.", en: 'Paste the JSON copied from <code>export.html</code> (the old HA pages) here. Nothing is written until you confirm the preview.' },
+  'import.preview': { fr: '👁️ Prévisualiser', en: '👁️ Preview' },
+  'import.confirm': { fr: '✅ Confirmer l\'import', en: '✅ Confirm import' },
+  'import.staleWarning': { fr: "L'aperçu ne correspond plus au texte collé — relance la prévisualisation.", en: 'The preview no longer matches the pasted text — run the preview again.' },
+  'import.done': { fr: '✓ Import terminé', en: '✓ Import complete' },
+
+  // --- src/ui/screens/WeekScreen.ts ---
+  'week.today': { fr: 'auj.', en: 'today' },
+  'week.title': { fr: '🗓️ Semainier', en: '🗓️ Weekly planner' },
+  'week.col.day': { fr: 'Jour', en: 'Day' },
+  'week.col.type': { fr: 'Type', en: 'Type' },
+  'week.col.sportKcal': { fr: 'kcal sport', en: 'exercise kcal' },
+  'week.plaisirHint': { fr: '🍺 = jour plaisir (tap pour cycler)', en: '🍺 = treat day (tap to cycle)' },
+
+  // --- src/migration/importExport.ts (runImport's per-key notes/errors, displayed verbatim
+  // by ImportScreen.ts and SettingsScreen.ts's Nextcloud restore preview) ---
+  'import.err.invalidJson': { fr: 'JSON invalide — vérifie que le blob a été copié en entier.', en: 'Invalid JSON — check that the blob was copied in full.' },
+  'import.err.unexpectedFormat': { fr: "Format inattendu : ce n'est pas un objet JSON.", en: "Unexpected format: this isn't a JSON object." },
+  'import.note.addedKnown': { fr: '{added} nouvelle(s), {skipped} déjà connue(s)', en: '{added} new, {skipped} already known' },
+  'import.note.absentOrBadFormat': { fr: 'absent ou format inattendu', en: 'absent or unexpected format' },
+  'import.note.absent': { fr: 'absent', en: 'absent' },
+  'import.note.adopted': { fr: 'adopté', en: 'adopted' },
+  'import.note.currentDayAdopted': { fr: 'adopté (aucune journée en cours)', en: 'adopted (no day currently in progress)' },
+  'import.note.currentDaySkipped': { fr: 'ignoré — une journée en cours existe déjà', en: 'ignored — a day is already in progress' },
+  'import.note.sportKcalNotImported': { fr: 'non importé — valeur journalière éphémère', en: 'not imported — a transient daily value' },
+  'import.note.daysAdded': { fr: '{added} jour(s) ajouté(s), {skipped} déjà connu(s)', en: '{added} day(s) added, {skipped} already known' },
+  'import.note.plaisirAdopted': { fr: 'adopté (semaine en cours, rien de saisi encore)', en: 'adopted (current week, nothing entered yet)' },
+  'import.note.plaisirSkipped': { fr: 'ignoré — semaine différente ou déjà saisi', en: 'ignored — different week or already entered' },
+  'import.note.plaisirWeekDerived': { fr: 'dérivé automatiquement de plaisir_overrides, pas importé séparément', en: 'auto-derived from plaisir_overrides, not imported separately' },
+  'import.note.habitsUpdated': { fr: '{added} ajoutée(s)/mise(s) à jour, {skipped} déjà à jour', en: '{added} added/updated, {skipped} already up to date' },
+  'import.note.entriesAdded': { fr: '{added} ajoutée(s), {skipped} déjà connue(s)', en: '{added} added, {skipped} already known' },
+  'import.note.foodLogTodaySkipped': { fr: "ignoré — journal d'un autre jour", en: "ignored — another day's journal" },
+  'import.note.aiFootprintMerged': { fr: 'cumulé avec les données existantes', en: 'merged with existing data' },
+
+  // --- src/migration/exportDump.ts (per-key descriptions in the Export screen's counts list) ---
+  'export.describe.entries': { fr: '{n} entrée(s)', en: '{n} entries' },
+  'export.describe.entriesToday': { fr: "{n} entrée(s) (aujourd'hui)", en: '{n} entries (today)' },
+  'export.describe.daysThisWeek': { fr: '{n} jour(s) (semaine en cours)', en: '{n} day(s) (current week)' },
+  'export.describe.daysPlanned': { fr: '{n} jour(s) planifiés', en: '{n} day(s) planned' },
+  'export.describe.present': { fr: 'présent', en: 'present' },
+
+  // --- src/integrations/nextcloudWebdav.ts ---
+  'nextcloud.err.timeout': { fr: 'délai dépassé, le serveur ne répond pas', en: 'timed out, the server isn\'t responding' },
+  'nextcloud.err.incompleteConfig': { fr: 'Configuration Nextcloud incomplète', en: 'Incomplete Nextcloud configuration' },
+  'nextcloud.err.noBackupFound': { fr: 'Aucune sauvegarde trouvée sur Nextcloud', en: 'No backup found on Nextcloud' },
+
+  // --- src/integrations/barcodeScan.ts ---
+  'barcode.err.moduleInstall': { fr: 'Installation du module de scan impossible.', en: 'Could not install the scan module.' },
+  'barcode.err.scanFailed': { fr: 'Scan impossible.', en: 'Scan failed.' },
+  'barcode.err.lookupFailed': { fr: 'Recherche impossible — vérifier la connexion.', en: 'Search failed — check your connection.' },
 } as const satisfies Record<string, StringEntry>;
 
 export type StringKey = keyof typeof STRINGS;

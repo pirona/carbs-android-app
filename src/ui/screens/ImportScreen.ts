@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { runImport, type ImportRepos } from '../../migration/importExport';
+import { t } from '../i18n/strings';
 
 // Migration import screen (plan §Migration) — paste the blob from the old HA pages'
 // export.html, preview what would change, then explicitly confirm before anything is
@@ -8,17 +9,16 @@ import { runImport, type ImportRepos } from '../../migration/importExport';
 export function renderImportScreen(container: HTMLElement, repos: ImportRepos): void {
   container.innerHTML = `
     <p class="hint">
-      Colle ici le JSON copié depuis <code>export.html</code> (les anciennes pages HA).
-      Rien n'est écrit avant que tu confirmes l'aperçu.
+      ${t('import.hint')}
     </p>
     <div class="card">
       <textarea id="import-input" placeholder='{"day_history": [...], ...}'></textarea>
     </div>
-    <button class="btn-cta" id="import-preview">👁️ Prévisualiser</button>
+    <button class="btn-cta" id="import-preview">${t('import.preview')}</button>
     <div class="card" id="import-preview-card" style="display:none">
       <div class="counts" id="import-counts"></div>
     </div>
-    <button class="btn-cta" id="import-confirm" style="display:none">✅ Confirmer l'import</button>
+    <button class="btn-cta" id="import-confirm" style="display:none">${t('import.confirm')}</button>
     <div class="msg" id="import-msg"></div>
   `;
 
@@ -61,7 +61,7 @@ export function renderImportScreen(container: HTMLElement, repos: ImportRepos): 
   confirmBtn.addEventListener('click', async () => {
     if (previewedRaw === null || previewedRaw !== input.value) {
       msgEl.className = 'msg error';
-      msgEl.textContent = "L'aperçu ne correspond plus au texte collé — relance la prévisualisation.";
+      msgEl.textContent = t('import.staleWarning');
       return;
     }
     const result = await runImport(repos, input.value, true);
@@ -71,7 +71,7 @@ export function renderImportScreen(container: HTMLElement, repos: ImportRepos): 
       return;
     }
     msgEl.className = 'msg ok';
-    msgEl.textContent = '✓ Import terminé';
+    msgEl.textContent = t('import.done');
     resetConfirm();
   });
 }

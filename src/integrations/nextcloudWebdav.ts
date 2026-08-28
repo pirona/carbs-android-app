@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { SecureStorage } from '@aparajita/capacitor-secure-storage';
+import { t } from '../ui/i18n/strings';
 
 // Fixed filename at the WebDAV root — avoids needing a MKCOL call to create a folder
 // before the first PUT. `fetch` here is routed through CapacitorHttp (see
@@ -28,7 +29,7 @@ async function withTimeout<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<
   try {
     return await fn(controller.signal);
   } catch (e) {
-    if ((e as Error).name === 'AbortError') throw new Error('délai dépassé, le serveur ne répond pas');
+    if ((e as Error).name === 'AbortError') throw new Error(t('nextcloud.err.timeout'));
     throw e;
   } finally {
     clearTimeout(timer);
@@ -53,7 +54,7 @@ export async function setNextcloudPassword(password: string): Promise<void> {
 }
 
 export async function backupToNextcloud(conn: NextcloudConnection, password: string, blob: string): Promise<void> {
-  if (!conn.url || !conn.username || !password) throw new Error('Configuration Nextcloud incomplète');
+  if (!conn.url || !conn.username || !password) throw new Error(t('nextcloud.err.incompleteConfig'));
   await withTimeout(async (signal) => {
     const res = await fetch(davUrl(conn), {
       method: 'PUT',
@@ -69,14 +70,14 @@ export async function backupToNextcloud(conn: NextcloudConnection, password: str
 }
 
 export async function restoreFromNextcloud(conn: NextcloudConnection, password: string): Promise<string> {
-  if (!conn.url || !conn.username || !password) throw new Error('Configuration Nextcloud incomplète');
+  if (!conn.url || !conn.username || !password) throw new Error(t('nextcloud.err.incompleteConfig'));
   return withTimeout(async (signal) => {
     const res = await fetch(davUrl(conn), {
       method: 'GET',
       headers: { Authorization: authHeader(conn, password) },
       signal,
     });
-    if (res.status === 404) throw new Error('Aucune sauvegarde trouvée sur Nextcloud');
+    if (res.status === 404) throw new Error(t('nextcloud.err.noBackupFound'));
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.text();
   });

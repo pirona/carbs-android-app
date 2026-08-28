@@ -12,6 +12,7 @@ import type { ProfileRepo } from '../../storage/repos/profileRepo';
 import { detectDayType } from '../../core/calc/dayType';
 import { formatDateKey } from '../../core/calc/date';
 import { DEFAULT_THRESHOLDS } from '../../core/types';
+import { t } from '../i18n/strings';
 
 export interface WeekScreenRepos {
   dayHistory: DayHistoryRepo;
@@ -20,7 +21,9 @@ export interface WeekScreenRepos {
   profile: ProfileRepo;
 }
 
-const DOW = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+// Indexed by Date#getDay() (0=Sunday..6=Saturday) — reuses ProgressScreen's day-abbreviation
+// dictionary entries (same 3-letter labels), just reordered/re-keyed for this convention.
+const DOW_KEYS = ['progress.week.day.sun', 'progress.week.day.mon', 'progress.week.day.tue', 'progress.week.day.wed', 'progress.week.day.thu', 'progress.week.day.fri', 'progress.week.day.sat'] as const;
 const BADGE: Record<DayType, string> = { high: 'HIGH', medium: 'MED', low: 'LOW', plaisir: '🍺' };
 const COLOR: Record<DayType, string> = { high: 'var(--high)', medium: 'var(--medium)', low: 'var(--low)', plaisir: 'var(--plaisir)' };
 
@@ -85,8 +88,8 @@ export function renderWeekScreen(container: HTMLElement, repos: WeekScreenRepos)
       rows.push(`
         <tr class="${isToday ? 'today-row' : ''}">
           <td style="white-space:nowrap;${isToday ? 'color:var(--text);font-weight:700' : 'color:var(--text-muted)'}">
-            ${DOW[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}
-            ${isToday ? '<span style="color:var(--medium);font-size:10px"> auj.</span>' : ''}
+            ${t(DOW_KEYS[d.getDay()])} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}
+            ${isToday ? `<span style="color:var(--medium);font-size:10px"> ${t('week.today')}</span>` : ''}
           </td>
           <td><span style="color:${COLOR[type]};font-weight:700;font-size:11px">${BADGE[type]}</span></td>
           <td style="text-align:center">
@@ -102,12 +105,12 @@ export function renderWeekScreen(container: HTMLElement, repos: WeekScreenRepos)
 
     return `
       <div class="card">
-        <h2>🗓️ Semainier</h2>
+        <h2>${t('week.title')}</h2>
         <table class="week-table">
-          <thead><tr><th>Jour</th><th>Type</th><th style="text-align:center">🍺</th><th style="text-align:right">kcal sport</th></tr></thead>
+          <thead><tr><th>${t('week.col.day')}</th><th>${t('week.col.type')}</th><th style="text-align:center">🍺</th><th style="text-align:right">${t('week.col.sportKcal')}</th></tr></thead>
           <tbody>${rows.join('')}</tbody>
         </table>
-        <p class="empty-hint" style="margin-top:8px;padding-bottom:0">🍺 = jour plaisir (tap pour cycler)</p>
+        <p class="empty-hint" style="margin-top:8px;padding-bottom:0">${t('week.plaisirHint')}</p>
       </div>`;
   }
 
