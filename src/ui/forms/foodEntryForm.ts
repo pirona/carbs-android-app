@@ -19,8 +19,8 @@ import { escapeHtml, fmt1 } from '../util';
 import { t } from '../i18n/strings';
 import { searchOFF, type OffProduct } from '../../integrations/openFoodFacts';
 import { scanBarcode, lookupOFF } from '../../integrations/barcodeScan';
-import { parseFoodText } from '../../integrations/mistralFoodParse';
-import { MissingMistralKeyError } from '../../integrations/mistralClient';
+import { parseFoodText } from '../../integrations/aiFoodParse';
+import { MissingAiKeyError, MissingAiBaseUrlError, loadAiModels } from '../../integrations/aiClient';
 
 export interface FoodEntryPrefill {
   label: string;
@@ -212,7 +212,8 @@ export type AiInterpretResult = { ok: true; prefill: FoodEntryPrefill } | { ok: 
 // safe to return a fully-built FoodEntryPrefill here.
 export async function interpretFoodTextWithAI(text: string): Promise<AiInterpretResult> {
   try {
-    const result = await parseFoodText(text);
+    const models = await loadAiModels();
+    const result = await parseFoodText(text, models.textModel);
     return {
       ok: true,
       prefill: {
@@ -227,7 +228,7 @@ export async function interpretFoodTextWithAI(text: string): Promise<AiInterpret
       },
     };
   } catch (e) {
-    if (e instanceof MissingMistralKeyError) return { ok: false, error: e.message };
+    if (e instanceof MissingAiKeyError || e instanceof MissingAiBaseUrlError) return { ok: false, error: e.message };
     return { ok: false, error: t('foodEntry.aiInterpretError', { message: (e as Error).message }) };
   }
 }

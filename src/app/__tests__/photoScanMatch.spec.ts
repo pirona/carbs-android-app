@@ -7,8 +7,8 @@ vi.mock('../../integrations/openFoodFacts', () => ({ searchOFF: (query: string) 
 
 import { componentToRow, habitToRows, receiptItemToRow, tryRecognizeHabit } from '../photoScanMatch';
 import type { Habit } from '../../core/types';
-import type { PlateComponent } from '../../integrations/mistralFoodVision';
-import type { ReceiptItem } from '../../integrations/mistralReceiptScan';
+import type { PlateComponent } from '../../integrations/aiFoodVision';
+import type { ReceiptItem } from '../../integrations/aiReceiptScan';
 
 function receiptItem(overrides: Partial<ReceiptItem> & { label: string }): ReceiptItem {
   return { raw_text: overrides.label, quantity: 1, confidence: 'medium', ...overrides };

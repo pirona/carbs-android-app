@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { callMistralChat, extractToolCallArguments, requireMistralApiKey, recordMistralUsage } from './mistralClient';
+import { callAiChat, extractToolCallArguments, requireAiCallContext, recordAiUsage } from './aiClient';
+import { DEFAULT_AI_MODELS } from '../storage/repos/aiModelsRepo';
 
 // Direct client call to api.mistral.ai — a receipt photo (ticket de caisse) can list many
 // food items at once, unlike a single-plate photo. Deliberately does NOT ask Mistral for
@@ -25,11 +26,11 @@ const TIMEOUT_MS = 30_000;
 
 // The photo is sent once and never written to any repo — see PhotoScanScreen, which
 // discards the base64 string from memory as soon as this call resolves or fails.
-export async function analyzeReceiptPhoto(imageBase64: string, mimeType: string): Promise<ReceiptScanResult> {
-  const apiKey = await requireMistralApiKey();
-  const data = await callMistralChat(
+export async function analyzeReceiptPhoto(imageBase64: string, mimeType: string, model = DEFAULT_AI_MODELS.receiptModel): Promise<ReceiptScanResult> {
+  const ctx = await requireAiCallContext();
+  const data = await callAiChat(
     {
-      model: 'mistral-small-latest',
+      model,
       tool_choice: 'any',
       tools: [
         {
@@ -75,10 +76,10 @@ export async function analyzeReceiptPhoto(imageBase64: string, mimeType: string)
         },
       ],
     },
-    apiKey,
+    ctx,
     TIMEOUT_MS,
   );
-  void recordMistralUsage('receipt_scan', data);
+  void recordAiUsage('receipt_scan', data);
   const result = extractToolCallArguments(data);
   return {
     items: Array.isArray(result.items) ? result.items : [],

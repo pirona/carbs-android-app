@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { callMistralChat, extractToolCallArguments, requireMistralApiKey, recordMistralUsage } from './mistralClient';
+import { callAiChat, extractToolCallArguments, requireAiCallContext, recordAiUsage } from './aiClient';
+import { DEFAULT_AI_MODELS } from '../storage/repos/aiModelsRepo';
 
 // Direct client call to api.mistral.ai — replaces the retired n8n webhook relay. Tool
 // schema/prompt below is a verbatim port of the retired n8n workflow's "Mistral —
@@ -25,11 +26,11 @@ const TIMEOUT_MS = 30_000;
 
 // The photo is sent once and never written to any repo — see PhotoScanScreen, which
 // discards the base64 string from memory as soon as this call resolves or fails.
-export async function analyzePlatePhoto(imageBase64: string, mimeType: string): Promise<FoodVisionResult> {
-  const apiKey = await requireMistralApiKey();
-  const data = await callMistralChat(
+export async function analyzePlatePhoto(imageBase64: string, mimeType: string, model = DEFAULT_AI_MODELS.visionModel): Promise<FoodVisionResult> {
+  const ctx = await requireAiCallContext();
+  const data = await callAiChat(
     {
-      model: 'mistral-small-latest',
+      model,
       tool_choice: 'any',
       tools: [
         {
@@ -78,10 +79,10 @@ export async function analyzePlatePhoto(imageBase64: string, mimeType: string): 
         },
       ],
     },
-    apiKey,
+    ctx,
     TIMEOUT_MS,
   );
-  void recordMistralUsage('food_vision', data);
+  void recordAiUsage('food_vision', data);
   const result = extractToolCallArguments(data);
   return {
     components: Array.isArray(result.components) ? result.components : [],

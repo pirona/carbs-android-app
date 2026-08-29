@@ -3,8 +3,8 @@
 // from PhotoScanScreen's DOM/event code so the cascade and fast-path recognition can be
 // unit-tested without mocking a UI.
 import type { Habit, Per100 } from '../core/types';
-import type { PlateComponent } from '../integrations/mistralFoodVision';
-import type { ReceiptItem } from '../integrations/mistralReceiptScan';
+import type { PlateComponent } from '../integrations/aiFoodVision';
+import type { ReceiptItem } from '../integrations/aiReceiptScan';
 import { searchOFF, type OffProduct } from '../integrations/openFoodFacts';
 import type { CiqualEntry } from '../ciqual/matcher';
 
@@ -96,7 +96,7 @@ export async function componentToRow(c: PlateComponent): Promise<ScanRow> {
 // plate-specific reasoning ("a photographed plate is virtually always cooked food") that's
 // actively wrong for groceries — raw rice, raw chicken are legitimately what's bought. If
 // neither source hits, the row is left at zero macros for manual entry — Mistral is never
-// asked to guess nutrition for a receipt line (see mistralReceiptScan.ts), so there's no AI
+// asked to guess nutrition for a receipt line (see aiReceiptScan.ts), so there's no AI
 // guess to fall back to the way componentToRow falls back to Mistral's own estimate.
 export async function receiptItemToRow(item: ReceiptItem): Promise<ScanRow> {
   let offResults: OffProduct[] = [];

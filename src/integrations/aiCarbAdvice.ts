@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import type { DayType, MealSlot } from '../core/types';
 import type { AdviceCompleteness } from '../core/calc/adviceCompleteness';
-import { callMistralChat, extractJsonModeContent, requireMistralApiKey, recordMistralUsage } from './mistralClient';
+import { callAiChat, extractJsonModeContent, requireAiCallContext, recordAiUsage } from './aiClient';
+import { DEFAULT_AI_MODELS } from '../storage/repos/aiModelsRepo';
 
 // Direct client call to api.mistral.ai — replaces the retired n8n webhook relay. System
 // prompt below is a verbatim port of the retired n8n workflow's "Build Prompt" node — do not
@@ -73,11 +74,11 @@ function buildUserPrompt(payload: CarbAdviceRequest): string {
   return `Voici les données de la journée à analyser (déjà calculées côté application, ne recalcule aucun total ni aucune cible toi-même) :\n${JSON.stringify(payload, null, 2)}\n\nDonne un conseil de déficit calorique pour cette journée précise, en tenant compte du type de jour (carb cycling) et de la répartition par repas (petit_dej / dejeuner / diner / collation = hors-repas).`;
 }
 
-export async function fetchCarbAdvice(payload: CarbAdviceRequest): Promise<CarbAdviceResult> {
-  const apiKey = await requireMistralApiKey();
-  const data = await callMistralChat(
+export async function fetchCarbAdvice(payload: CarbAdviceRequest, model = DEFAULT_AI_MODELS.adviceModel): Promise<CarbAdviceResult> {
+  const ctx = await requireAiCallContext();
+  const data = await callAiChat(
     {
-      model: 'mistral-large-latest',
+      model,
       temperature: 0.3,
       response_format: { type: 'json_object' },
       messages: [
@@ -85,10 +86,10 @@ export async function fetchCarbAdvice(payload: CarbAdviceRequest): Promise<CarbA
         { role: 'user', content: buildUserPrompt(payload) },
       ],
     },
-    apiKey,
+    ctx,
     TIMEOUT_MS,
   );
-  void recordMistralUsage('carb_advice', data);
+  void recordAiUsage('carb_advice', data);
   const parsed = extractJsonModeContent(data);
   if (typeof parsed.advice !== 'string' || !parsed.advice.trim()) {
     throw new Error('Réponse IA vide — réessaie.');

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Same principle as mistralCarbAdvice.ts (direct api.mistral.ai call, health-sourcing
+// Same principle as aiCarbAdvice.ts (direct chat-completions call, health-sourcing
 // guardrails, hedges on incomplete data) but scoped to a trend over a date range instead of a
 // single day — ConseilsScreen's period bilan section only ever sends already-computed stats
 // (calcPeriodStats), never asks the model to recompute or invent a figure.
 import type { DayType } from '../core/types';
 import type { PeriodCompleteness } from '../core/calc/periodBilan';
-import { callMistralChat, extractJsonModeContent, requireMistralApiKey, recordMistralUsage } from './mistralClient';
+import { callAiChat, extractJsonModeContent, requireAiCallContext, recordAiUsage } from './aiClient';
+import { DEFAULT_AI_MODELS } from '../storage/repos/aiModelsRepo';
 
 export interface PeriodBilanStats {
   total_days: number;
@@ -62,11 +63,11 @@ function buildUserPrompt(payload: PeriodBilanRequest): string {
   return `Voici les statistiques de la période à analyser (déjà calculées côté application, ne recalcule aucun total ni aucune moyenne toi-même) :\n${JSON.stringify(payload, null, 2)}\n\nDonne un bilan de tendance pour cette période précise (du ${payload.start_date} au ${payload.end_date}).`;
 }
 
-export async function fetchPeriodBilan(payload: PeriodBilanRequest): Promise<PeriodBilanResult> {
-  const apiKey = await requireMistralApiKey();
-  const data = await callMistralChat(
+export async function fetchPeriodBilan(payload: PeriodBilanRequest, model = DEFAULT_AI_MODELS.adviceModel): Promise<PeriodBilanResult> {
+  const ctx = await requireAiCallContext();
+  const data = await callAiChat(
     {
-      model: 'mistral-large-latest',
+      model,
       temperature: 0.3,
       response_format: { type: 'json_object' },
       messages: [
@@ -74,10 +75,10 @@ export async function fetchPeriodBilan(payload: PeriodBilanRequest): Promise<Per
         { role: 'user', content: buildUserPrompt(payload) },
       ],
     },
-    apiKey,
+    ctx,
     TIMEOUT_MS,
   );
-  void recordMistralUsage('period_bilan', data);
+  void recordAiUsage('period_bilan', data);
   const parsed = extractJsonModeContent(data);
   if (typeof parsed.bilan !== 'string' || !parsed.bilan.trim()) {
     throw new Error('Réponse IA vide — réessaie.');

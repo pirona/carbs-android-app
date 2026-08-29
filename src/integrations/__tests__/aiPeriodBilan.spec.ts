@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const secureStore = new Map<string, string>();
+const prefsStore = new Map<string, string>();
 
 vi.mock('@aparajita/capacitor-secure-storage', () => ({
   SecureStorage: {
@@ -17,8 +18,28 @@ vi.mock('@aparajita/capacitor-secure-storage', () => ({
   },
 }));
 
-import { MissingMistralKeyError } from '../mistralClient';
-import { fetchPeriodBilan, type PeriodBilanRequest } from '../mistralPeriodBilan';
+// aiClient.ts's requireAiCallContext() now also reads the configured provider (Preferences,
+// not SecureStorage) before every call — an empty store here resolves to DEFAULT_AI_PROVIDER
+// (provider: 'mistral'), matching this file's existing mistral-only expectations.
+vi.mock('@capacitor/preferences', () => ({
+  Preferences: {
+    async get({ key }: { key: string }) {
+      return { value: prefsStore.has(key) ? prefsStore.get(key)! : null };
+    },
+    async set({ key, value }: { key: string; value: string }) {
+      prefsStore.set(key, value);
+    },
+    async remove({ key }: { key: string }) {
+      prefsStore.delete(key);
+    },
+    async keys() {
+      return { keys: [...prefsStore.keys()] };
+    },
+  },
+}));
+
+import { MissingAiKeyError } from '../aiClient';
+import { fetchPeriodBilan, type PeriodBilanRequest } from '../aiPeriodBilan';
 
 const PAYLOAD: PeriodBilanRequest = {
   start_date: '2026-08-03',
@@ -41,12 +62,15 @@ const PAYLOAD: PeriodBilanRequest = {
 };
 
 describe('fetchPeriodBilan', () => {
-  beforeEach(() => secureStore.clear());
+  beforeEach(() => {
+    secureStore.clear();
+    prefsStore.clear();
+  });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('throws MissingMistralKeyError without any network call when no key is set', async () => {
+  it('throws MissingAiKeyError without any network call when no key is set', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    await expect(fetchPeriodBilan(PAYLOAD)).rejects.toBeInstanceOf(MissingMistralKeyError);
+    await expect(fetchPeriodBilan(PAYLOAD)).rejects.toBeInstanceOf(MissingAiKeyError);
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
@@ -67,7 +91,7 @@ describe('fetchPeriodBilan', () => {
 
     const result = await fetchPeriodBilan(PAYLOAD);
 
-    expect(sentBody.model).toBe('mistral-large-latest');
+    expect(sentBody.model).toBe('mistral-small-latest');
     expect(sentBody.response_format).toEqual({ type: 'json_object' });
     expect(sentBody.messages[0].role).toBe('system');
     expect(sentBody.messages[0].content).toContain('ANSES');

@@ -8,7 +8,9 @@ import type { ImportRepos } from '../../migration/importExport';
 import { DEFAULT_THEME, type ThemeMode, type ThemeRepo, type ThemeSettings } from '../../storage/repos/themeRepo';
 import { DEFAULT_NEXTCLOUD, type NextcloudAutoBackupMode, type NextcloudSettings } from '../../storage/repos/nextcloudRepo';
 import { backupToNextcloud, restoreFromNextcloud, getNextcloudPassword, setNextcloudPassword } from '../../integrations/nextcloudWebdav';
-import { getMistralApiKey, setMistralApiKey, testMistralConnection } from '../../integrations/mistralClient';
+import { getAiApiKey, setAiApiKey, testAiConnection, loadAiModels, saveAiModels, loadAiProvider, saveAiProvider } from '../../integrations/aiClient';
+import { DEFAULT_AI_MODELS, PROVIDER_DEFAULT_MODELS, type AiModelSettings } from '../../storage/repos/aiModelsRepo';
+import { DEFAULT_AI_PROVIDER, type AiProviderKind, type AiProviderSettings } from '../../storage/repos/aiProviderRepo';
 import { buildExportBlob } from '../../migration/exportDump';
 import { runImport } from '../../migration/importExport';
 import { applyTheme } from '../theme';
@@ -23,7 +25,7 @@ import { reconstructRetroactiveAiUsage, type RetroactiveUsageResult, type RetroB
 import { computeAiFootprintEquivalences } from '../../core/calc/aiFootprintEquivalences';
 import type { AiFeatureId } from '../../core/types';
 import { fmt } from '../format';
-import { fmt1 } from '../util';
+import { escapeHtml, fmt1 } from '../util';
 import { t, getLang, type Lang, type StringKey } from '../i18n/strings';
 
 export interface SettingsScreenRepos extends ImportRepos {
@@ -39,6 +41,11 @@ export interface SettingsScreenRepos extends ImportRepos {
 
 const MODE_LABEL_KEY: Record<ThemeMode, StringKey> = { auto: 'settings.theme.mode.auto', light: 'settings.theme.mode.light', dark: 'settings.theme.mode.dark' };
 const NC_MODE_LABEL_KEY: Record<NextcloudAutoBackupMode, StringKey> = { off: 'settings.nextcloud.mode.off', launch: 'settings.nextcloud.mode.launch' };
+const AI_PROVIDER_LABEL_KEY: Record<AiProviderKind, StringKey> = {
+  mistral: 'settings.ai.provider.mistral',
+  ollama: 'settings.ai.provider.ollama',
+  openai_compatible: 'settings.ai.provider.other',
+};
 const AI_FEATURE_LABEL_KEY: Record<AiFeatureId, StringKey> = {
   food_parse: 'aiFeature.food_parse',
   food_vision: 'aiFeature.food_vision',
@@ -87,6 +94,8 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
   // Deliberately not reloaded in the post-restore reload block below (see nc-restore-confirm) —
   // the Mistral key is guaranteed unaffected by any import, since it's never in the blob.
   let mistralHasKey = false;
+  let aiModels: AiModelSettings = DEFAULT_AI_MODELS;
+  let aiProvider: AiProviderSettings = DEFAULT_AI_PROVIDER;
   // Recomputed from stored token totals on every load — never cached across screen visits, so
   // the gCO2e/mL figures always reflect today's best-known conversion factor (see
   // core/calc/aiFootprint.ts for the source/methodology comment).
@@ -207,12 +216,47 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
 
       <div class="card">
         <h2>${t('settings.ai.title')}</h2>
-        <label class="field-label">${t('settings.ai.apiKey')} ${mistralHasKey ? t('settings.ai.apiKeySaved') : ''}</label>
+        <label class="field-label">${t('settings.ai.provider')}</label>
+        <div class="sort-buttons">
+          ${(['mistral', 'ollama', 'openai_compatible'] as AiProviderKind[])
+            .map(
+              (p) =>
+                `<button class="sort-btn ${aiProvider.provider === p ? 'active' : ''}" data-action="ai-provider" data-provider="${p}">${t(AI_PROVIDER_LABEL_KEY[p])}</button>`,
+            )
+            .join('')}
+        </div>
+        ${
+          aiProvider.provider !== 'mistral'
+            ? `
+        <label class="field-label">${t('settings.ai.baseUrl')}</label>
+        <input type="text" id="ai-base-url" placeholder="${aiProvider.provider === 'ollama' ? 'http://192.168.1.2:11434/v1' : 'https://openrouter.ai/api/v1'}" value="${escapeHtml(aiProvider.baseUrl)}" autocomplete="off" spellcheck="false">
+        <p class="empty-hint" style="padding:0">${t(aiProvider.provider === 'ollama' ? 'settings.ai.baseUrlHintOllama' : 'settings.ai.baseUrlHintOther')}</p>
+        <button class="btn-cta" data-action="ai-provider-save">${t('settings.ai.saveProvider')}</button>
+        <div class="msg" id="ai-provider-msg"></div>
+        `
+            : ''
+        }
+
+        <label class="field-label" style="margin-top:16px">${t('settings.ai.apiKey')} ${mistralHasKey ? t('settings.ai.apiKeySaved') : ''}</label>
         <input type="password" id="mistral-key" placeholder="${mistralHasKey ? '••••••••' : t('settings.ai.apiKeyPlaceholder')}" autocomplete="off">
-        <p class="empty-hint" style="padding:0">${t('settings.ai.keyStoredEncrypted')}</p>
+        <p class="empty-hint" style="padding:0">${t(aiProvider.provider === 'mistral' ? 'settings.ai.keyStoredEncrypted' : 'settings.ai.apiKeyOptionalHint')}</p>
         <button class="btn-cta" data-action="mistral-save">${t('settings.ai.saveKey')}</button>
         <button class="btn-secondary" data-action="mistral-test">${t('settings.ai.testConnection')}</button>
         <div class="msg" id="mistral-msg"></div>
+
+        <h3 style="margin-top:16px">${t('settings.ai.modelsTitle')}</h3>
+        <p class="empty-hint" style="padding:0">${t('settings.ai.modelsHint')}</p>
+        <label class="field-label">${t('settings.ai.modelText')}</label>
+        <input type="text" id="mistral-model-text" value="${escapeHtml(aiModels.textModel)}" autocomplete="off" spellcheck="false">
+        <label class="field-label">${t('settings.ai.modelVision')}</label>
+        <input type="text" id="mistral-model-vision" value="${escapeHtml(aiModels.visionModel)}" autocomplete="off" spellcheck="false">
+        <label class="field-label">${t('settings.ai.modelReceipt')}</label>
+        <input type="text" id="mistral-model-receipt" value="${escapeHtml(aiModels.receiptModel)}" autocomplete="off" spellcheck="false">
+        <label class="field-label">${t('settings.ai.modelAdvice')}</label>
+        <input type="text" id="mistral-model-advice" value="${escapeHtml(aiModels.adviceModel)}" autocomplete="off" spellcheck="false">
+        <button class="btn-cta" data-action="mistral-models-save">${t('settings.ai.saveModels')}</button>
+        <button class="btn-secondary" data-action="mistral-models-reset">${t('settings.ai.resetModels')}</button>
+        <div class="msg" id="mistral-models-msg"></div>
       </div>
 
       <div class="card">
@@ -444,11 +488,34 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
 
     const mistralMsgEl = () => container.querySelector<HTMLDivElement>('#mistral-msg')!;
 
+    const providerBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-action="ai-provider"]');
+    if (providerBtn) {
+      aiProvider = { ...aiProvider, provider: providerBtn.dataset.provider as AiProviderKind };
+      await saveAiProvider(aiProvider);
+      render();
+      return;
+    }
+
+    if ((e.target as HTMLElement).closest('[data-action="ai-provider-save"]')) {
+      const msgEl = container.querySelector<HTMLDivElement>('#ai-provider-msg')!;
+      const baseUrl = container.querySelector<HTMLInputElement>('#ai-base-url')!.value.trim();
+      if (!baseUrl) {
+        msgEl.className = 'msg error';
+        msgEl.textContent = t('settings.ai.baseUrlMissing');
+        return;
+      }
+      aiProvider = { ...aiProvider, baseUrl };
+      await saveAiProvider(aiProvider);
+      msgEl.className = 'msg ok';
+      msgEl.textContent = t('settings.ai.providerSaved');
+      return;
+    }
+
     if ((e.target as HTMLElement).closest('[data-action="mistral-save"]')) {
       const key = container.querySelector<HTMLInputElement>('#mistral-key')!.value.trim();
       const msgEl = mistralMsgEl();
       if (key) {
-        await setMistralApiKey(key);
+        await setAiApiKey(key);
         mistralHasKey = true;
         msgEl.className = 'msg ok';
         msgEl.textContent = t('settings.ai.keySaved');
@@ -463,15 +530,23 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
     if ((e.target as HTMLElement).closest('[data-action="mistral-test"]')) {
       const msgEl = mistralMsgEl();
       const typed = container.querySelector<HTMLInputElement>('#mistral-key')!.value.trim();
-      const key = typed || (await getMistralApiKey());
-      if (!key) {
+      const key = typed || (await getAiApiKey());
+      const baseUrlInput = container.querySelector<HTMLInputElement>('#ai-base-url');
+      const baseUrl = baseUrlInput ? baseUrlInput.value.trim() : aiProvider.baseUrl;
+      if (aiProvider.provider === 'mistral' && !key) {
         msgEl.className = 'msg error';
         msgEl.textContent = t('settings.ai.noKeyToTest');
         return;
       }
+      if (aiProvider.provider !== 'mistral' && !baseUrl) {
+        msgEl.className = 'msg error';
+        msgEl.textContent = t('settings.ai.baseUrlMissing');
+        return;
+      }
+      const testModel = container.querySelector<HTMLInputElement>('#mistral-model-text')!.value.trim() || PROVIDER_DEFAULT_MODELS[aiProvider.provider].textModel;
       msgEl.className = 'msg';
       msgEl.textContent = t('settings.ai.testing');
-      const result = await testMistralConnection(key);
+      const result = await testAiConnection({ provider: aiProvider.provider, baseUrl, apiKey: key }, testModel);
       msgEl.className = result.ok ? 'msg ok' : 'msg error';
       if (result.ok) {
         msgEl.textContent = t('settings.ai.keyValid');
@@ -480,6 +555,32 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
       } else {
         msgEl.textContent = t('settings.ai.testError', { message: result.message ?? '' });
       }
+      return;
+    }
+
+    if ((e.target as HTMLElement).closest('[data-action="mistral-models-save"]')) {
+      const msgEl = container.querySelector<HTMLDivElement>('#mistral-models-msg')!;
+      const defaults = PROVIDER_DEFAULT_MODELS[aiProvider.provider];
+      aiModels = {
+        textModel: container.querySelector<HTMLInputElement>('#mistral-model-text')!.value.trim() || defaults.textModel,
+        visionModel: container.querySelector<HTMLInputElement>('#mistral-model-vision')!.value.trim() || defaults.visionModel,
+        receiptModel: container.querySelector<HTMLInputElement>('#mistral-model-receipt')!.value.trim() || defaults.receiptModel,
+        adviceModel: container.querySelector<HTMLInputElement>('#mistral-model-advice')!.value.trim() || defaults.adviceModel,
+      };
+      await saveAiModels(aiModels);
+      msgEl.className = 'msg ok';
+      msgEl.textContent = t('settings.ai.modelsSaved');
+      render();
+      return;
+    }
+
+    if ((e.target as HTMLElement).closest('[data-action="mistral-models-reset"]')) {
+      aiModels = PROVIDER_DEFAULT_MODELS[aiProvider.provider];
+      await saveAiModels(aiModels);
+      const msgEl = container.querySelector<HTMLDivElement>('#mistral-models-msg')!;
+      msgEl.className = 'msg ok';
+      msgEl.textContent = t('settings.ai.modelsReset');
+      render();
       return;
     }
 
@@ -513,7 +614,9 @@ export function renderSettingsScreen(container: HTMLElement, repos: SettingsScre
     theme = await repos.theme.load();
     nextcloud = await repos.nextcloud.load();
     ncHasPassword = !!(await getNextcloudPassword());
-    mistralHasKey = !!(await getMistralApiKey());
+    mistralHasKey = !!(await getAiApiKey());
+    aiModels = await loadAiModels();
+    aiProvider = await loadAiProvider();
     await loadAiFootprintAndRetro();
     render();
   })();

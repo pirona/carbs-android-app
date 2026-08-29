@@ -42,8 +42,8 @@ export class AiFootprintRepo {
     await this.storage.set(AI_FOOTPRINT_KEY, JSON.stringify(data));
   }
 
-  // Read-modify-write increment for one feature — called by recordMistralUsage
-  // (mistralClient.ts) right after each real AI call. Not atomic across concurrent calls
+  // Read-modify-write increment for one feature — called by recordAiUsage
+  // (aiClient.ts) right after each real AI call. Not atomic across concurrent calls
   // (Preferences has no transaction), acceptable: worst case under overlapping AI calls is
   // an undercount of a handful of tokens, never a crash.
   async recordUsage(feature: AiFeatureId, promptTokens: number, completionTokens: number): Promise<void> {

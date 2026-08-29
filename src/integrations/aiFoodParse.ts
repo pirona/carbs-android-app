@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import type { Per100 } from '../core/types';
-import { callMistralChat, extractToolCallArguments, requireMistralApiKey, recordMistralUsage } from './mistralClient';
+import { callAiChat, extractToolCallArguments, requireAiCallContext, recordAiUsage } from './aiClient';
+import { DEFAULT_AI_MODELS } from '../storage/repos/aiModelsRepo';
 
 // Direct client call to api.mistral.ai — replaces the retired n8n webhook relay. Tool
 // schema/prompt below is a verbatim port of the retired n8n workflow's "Mistral —
@@ -15,11 +16,11 @@ export interface FoodParseResult {
 
 const TIMEOUT_MS = 20_000;
 
-export async function parseFoodText(text: string): Promise<FoodParseResult> {
-  const apiKey = await requireMistralApiKey();
-  const data = await callMistralChat(
+export async function parseFoodText(text: string, model = DEFAULT_AI_MODELS.textModel): Promise<FoodParseResult> {
+  const ctx = await requireAiCallContext();
+  const data = await callAiChat(
     {
-      model: 'mistral-small-latest',
+      model,
       tool_choice: 'any',
       tools: [
         {
@@ -47,10 +48,10 @@ export async function parseFoodText(text: string): Promise<FoodParseResult> {
       ],
       messages: [{ role: 'user', content: text }],
     },
-    apiKey,
+    ctx,
     TIMEOUT_MS,
   );
-  void recordMistralUsage('food_parse', data);
+  void recordAiUsage('food_parse', data);
   const result = extractToolCallArguments(data);
   return {
     label: result.label || text,

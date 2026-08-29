@@ -6,7 +6,7 @@
 // entry can be dragged into another section to fix a mislogged meal before asking for advice
 // (see mealSlotDrag.ts) — corrections write straight through to FoodLogHistoryRepo since this
 // is an archived day, not today's log. The advice text itself comes from Mistral via
-// mistralCarbAdvice.ts, with a system prompt pinned to recognized public-health bodies
+// aiCarbAdvice.ts, with a system prompt pinned to recognized public-health bodies
 // (ANSES/EFSA/OMS etc.) — this screen only ever sends structured numbers, never asks the model
 // to invent nutrition facts.
 //
@@ -42,9 +42,9 @@ import type { CarbAdviceHistoryRepo, CarbAdviceHistoryEntry } from '../../storag
 import type { CarbPeriodBilanHistoryRepo, CarbPeriodBilanHistoryEntry } from '../../storage/repos/carbPeriodBilanHistoryRepo';
 import type { ProfileRepo } from '../../storage/repos/profileRepo';
 import { calcMacros } from '../../core/calc/macros';
-import { fetchCarbAdvice, type CarbAdviceMacros, type CarbAdviceRequest, type CarbAdviceResult } from '../../integrations/mistralCarbAdvice';
-import { fetchPeriodBilan, type PeriodBilanRequest, type PeriodBilanResult } from '../../integrations/mistralPeriodBilan';
-import { MissingMistralKeyError } from '../../integrations/mistralClient';
+import { fetchCarbAdvice, type CarbAdviceMacros, type CarbAdviceRequest, type CarbAdviceResult } from '../../integrations/aiCarbAdvice';
+import { fetchPeriodBilan, type PeriodBilanRequest, type PeriodBilanResult } from '../../integrations/aiPeriodBilan';
+import { MissingAiKeyError, MissingAiBaseUrlError, loadAiModels } from '../../integrations/aiClient';
 import { type OffProduct } from '../../integrations/openFoodFacts';
 import {
   type FoodEntryPrefill,
@@ -516,7 +516,8 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
     periodBilan = null;
     render();
     try {
-      const result = await fetchPeriodBilan(payload);
+      const models = await loadAiModels();
+      const result = await fetchPeriodBilan(payload, models.adviceModel);
       periodBilan = result;
       await repos.carbPeriodBilanHistory.save({
         start_date: periodStart,
@@ -529,7 +530,7 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
       });
       periodHistory = await repos.carbPeriodBilanHistory.load();
     } catch (err) {
-      periodBilanError = err instanceof MissingMistralKeyError ? err.message : t('conseils.err.bilanFailed', { message: (err as Error).message });
+      periodBilanError = (err instanceof MissingAiKeyError || err instanceof MissingAiBaseUrlError) ? err.message : t('conseils.err.bilanFailed', { message: (err as Error).message });
     }
     periodBilanLoading = false;
     render();
@@ -573,7 +574,8 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
     advice = null;
     render();
     try {
-      const result = await fetchCarbAdvice(payload);
+      const models = await loadAiModels();
+      const result = await fetchCarbAdvice(payload, models.adviceModel);
       advice = result;
       await repos.carbAdviceHistory.save({
         date: day.date,
@@ -585,7 +587,7 @@ export function renderConseilsScreen(container: HTMLElement, repos: ConseilsScre
       });
       history = await repos.carbAdviceHistory.load();
     } catch (err) {
-      adviceError = err instanceof MissingMistralKeyError ? err.message : t('conseils.err.adviceFailed', { message: (err as Error).message });
+      adviceError = (err instanceof MissingAiKeyError || err instanceof MissingAiBaseUrlError) ? err.message : t('conseils.err.adviceFailed', { message: (err as Error).message });
     }
     adviceLoading = false;
     render();

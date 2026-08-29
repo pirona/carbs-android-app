@@ -9,8 +9,9 @@
 // ≈ 1,14 gCO2e et 45 mL d'eau. Facteurs par token dérivés ci-dessous (1.14/400, 45/400).
 // Aucune donnée officielle par taille de modèle n'existe — l'étude indique seulement que
 // l'impact est "globalement proportionnel à la taille du modèle" — donc ce même facteur est
-// appliqué uniformément à mistral-small-latest et mistral-large-latest ; voir le disclaimer
-// affiché à l'écran (SettingsScreen.ts).
+// appliqué uniformément à tout appel IA de l'app quel que soit le modèle/prestataire
+// réellement configuré (voir aiClient.ts/aiProviderRepo.ts) ; voir le disclaimer affiché à
+// l'écran (SettingsScreen.ts).
 export const GCO2E_PER_TOKEN = 0.00285;
 export const ML_WATER_PER_TOKEN = 0.1125;
 

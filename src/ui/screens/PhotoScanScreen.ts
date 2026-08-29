@@ -5,7 +5,7 @@
 // saved composite habits, else CIQUAL auto-match, else OFF on demand, else Mistral's own
 // rough estimate) -> editable confirm rows -> logged to today's journal, optionally also
 // saved as one composite habit. Receipt flow: capture -> Mistral vision (no macros asked of
-// the model — see mistralReceiptScan.ts) -> per-item match cascade (OFF first, then CIQUAL,
+// the model — see aiReceiptScan.ts) -> per-item match cascade (OFF first, then CIQUAL,
 // then manual — see photoScanMatch.ts's receiptItemToRow) -> editable confirm rows -> either
 // logged to today's journal (one shared meal) or added as N independent habits, chosen per
 // scan. In every flow, the photo (base64) is held only in a local closure var during the
@@ -14,9 +14,9 @@ import type { LogEntry, MealSlot } from '../../core/types';
 import type { HabitsRepo } from '../../storage/repos/habitsRepo';
 import type { FoodLogRepo } from '../../storage/repos/foodLogRepo';
 import { captureFoodPhoto } from '../../integrations/camera';
-import { analyzePlatePhoto } from '../../integrations/mistralFoodVision';
-import { analyzeReceiptPhoto } from '../../integrations/mistralReceiptScan';
-import { MissingMistralKeyError } from '../../integrations/mistralClient';
+import { analyzePlatePhoto } from '../../integrations/aiFoodVision';
+import { analyzeReceiptPhoto } from '../../integrations/aiReceiptScan';
+import { MissingAiKeyError, MissingAiBaseUrlError, loadAiModels } from '../../integrations/aiClient';
 import { lookupOFF, scanBarcode } from '../../integrations/barcodeScan';
 import { searchOFF } from '../../integrations/openFoodFacts';
 import { componentToRow, habitToRows, receiptItemToRow, tryRecognizeHabit, type RowSource, type ScanRow } from '../../app/photoScanMatch';
@@ -259,7 +259,8 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
     render();
     try {
       const habits = await repos.habits.load();
-      const result = await analyzePlatePhoto(photo.base64, photo.mimeType);
+      const models = await loadAiModels();
+      const result = await analyzePlatePhoto(photo.base64, photo.mimeType, models.visionModel);
       overallNote = result.overall_note;
       const recognized = tryRecognizeHabit(result.components, habits);
       if (recognized) {
@@ -273,7 +274,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
       expandedRows = defaultExpandedRows(rows);
       rowKcalTouched = new Set();
     } catch (e) {
-      errorMsg = e instanceof MissingMistralKeyError ? e.message : t('photoScan.err.analysisFailed', { message: (e as Error).message });
+      errorMsg = (e instanceof MissingAiKeyError || e instanceof MissingAiBaseUrlError) ? e.message : t('photoScan.err.analysisFailed', { message: (e as Error).message });
       state = 'error';
     }
     // photo.base64 falls out of scope here — never stored anywhere else.
@@ -302,7 +303,8 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
     state = 'analyzing';
     render();
     try {
-      const result = await analyzeReceiptPhoto(photo.base64, photo.mimeType);
+      const models = await loadAiModels();
+      const result = await analyzeReceiptPhoto(photo.base64, photo.mimeType, models.receiptModel);
       overallNote = result.merchant_note;
       recognizedHabitLabel = null; // no habit-recognition fast-path for receipts — not a composite dish
       rows = await Promise.all(result.items.map(receiptItemToRow));
@@ -310,7 +312,7 @@ export function renderPhotoScanScreen(container: HTMLElement, repos: PhotoScanSc
       expandedRows = defaultExpandedRows(rows);
       rowKcalTouched = new Set();
     } catch (e) {
-      errorMsg = e instanceof MissingMistralKeyError ? e.message : t('photoScan.err.analysisFailed', { message: (e as Error).message });
+      errorMsg = (e instanceof MissingAiKeyError || e instanceof MissingAiBaseUrlError) ? e.message : t('photoScan.err.analysisFailed', { message: (e as Error).message });
       state = 'error';
     }
     // photo.base64 falls out of scope here — never stored anywhere else.
